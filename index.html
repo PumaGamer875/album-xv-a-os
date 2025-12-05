@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Álbum XV Años</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Incluir Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://tvqwbvdzjtyzsfegyuzl.supabase.co"></script>
+</head>
+<body>
+    <header>
+        <h1>🌟 Mi XV Años 🌟</h1>
+        <p>Recuerdos especiales de un día mágico</p>
+    </header>
+
+    <main>
+        <!-- Filtros por categoría -->
+        <div class="filtros">
+            <button class="filtro-btn active" data-categoria="todas">Todas</button>
+            <button class="filtro-btn" data-categoria="preparacion">Preparación</button>
+            <button class="filtro-btn" data-categoria="ceremonia">Ceremonia</button>
+            <button class="filtro-btn" data-categoria="fiesta">Fiesta</button>
+            <button class="filtro-btn" data-categoria="recuerdos">Recuerdos</button>
+        </div>
+
+        <!-- Galería de fotos -->
+        <div id="galeria" class="galeria">
+            <!-- Las fotos se cargarán con JavaScript -->
+        </div>
+
+        <!-- Cargar más fotos -->
+        <div class="cargar-mas">
+            <button id="btnCargarMas">Cargar más fotos</button>
+        </div>
+    </main>
+
+    <!-- Pie de página -->
+    <footer>
+        <p>Con ❤️ para [Nombre] - 2025</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
