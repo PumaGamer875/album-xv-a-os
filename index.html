@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Álbum XV Años</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;500;600&display=swap">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -12,16 +13,17 @@
     <!-- Portada con imagen desde Supabase -->
     <section id="portada" class="portada">
         <div class="portada-contenido">
-            <h1 id="titulo-portada">Cargando...</h1>
+            <h1 id="titulo-portada">Mi XV Años</h1>
             <p id="subtitulo-portada">Álbum digital de recuerdos</p>
-            <button class="btn-subir" id="btnMostrarSubir">
-                <i class="fas fa-cloud-upload-alt"></i> Subir Recuerdos
-            </button>
-            <a href="#galeria" class="btn-ver-galeria">
-                <i class="fas fa-images"></i> Ver Galería
-            </a>
+            <div class="portada-botones">
+                <button class="btn-subir" id="btnMostrarSubir">
+                    <i class="fas fa-cloud-upload-alt"></i> Subir Recuerdos
+                </button>
+                <a href="#galeria" class="btn-ver-galeria">
+                    <i class="fas fa-images"></i> Ver Galería
+                </a>
+            </div>
         </div>
-        <div class="portada-overlay"></div>
     </section>
 
     <!-- Modal para subir archivos -->
@@ -36,33 +38,32 @@
                 <form id="formSubir">
                     <div class="input-group">
                         <label for="titulo"><i class="fas fa-heading"></i> Título (opcional)</label>
-                        <input type="text" id="titulo" placeholder="Ej: Mi vestido, La torta...">
+                        <input type="text" id="titulo" placeholder="Ej: Mi vestido, La torta..." autocomplete="off">
                     </div>
                     
                     <div class="input-group">
                         <label for="descripcion"><i class="fas fa-comment-alt"></i> Descripción (opcional)</label>
-                        <textarea id="descripcion" rows="3" placeholder="Cuenta algo especial de este momento..."></textarea>
+                        <textarea id="descripcion" rows="3" placeholder="Cuenta algo especial de este momento..." autocomplete="off"></textarea>
                     </div>
 
                     <div class="input-group">
                         <label><i class="fas fa-file-upload"></i> Seleccionar archivos</label>
                         <div class="drop-zone" id="dropZone">
                             <i class="fas fa-cloud-upload-alt fa-3x"></i>
-                            <p>Arrastra y suelta fotos/videos aquí</p>
-                            <p>o haz clic para seleccionar</p>
+                            <p class="drop-text">Arrastra y suelta fotos/videos aquí</p>
+                            <p class="drop-text">o haz clic para seleccionar</p>
                             <input type="file" id="fileInput" multiple accept="image/*,video/*">
-                            <!-- ✅ Agrega este mensaje informativo -->
-        <p class="info-tamano">
-            <i class="fas fa-info-circle"></i>
-            Tamaño máximo por archivo: <strong>50MB</strong>
-        </p>
+                            <p class="info-tamano">
+                                <i class="fas fa-info-circle"></i>
+                                Tamaño máximo por archivo: <strong>50MB</strong>
+                            </p>
                         </div>
                         <div id="previewArchivos" class="preview-archivos"></div>
                     </div>
 
                     <div class="progreso-contenedor" id="progresoContenedor" style="display: none;">
                         <div class="progreso-bar" id="progresoBar"></div>
-                        <p id="progresoTexto">Subiendo...</p>
+                        <p id="progresoTexto">Preparando subida...</p>
                     </div>
 
                     <button type="submit" class="btn-submit" id="btnSubmit">
@@ -73,18 +74,51 @@
         </div>
     </div>
 
+    <!-- Visor de fotos/videos -->
+    <div class="visor-fotos" id="visorFotos">
+        <button class="visor-cerrar" id="visorCerrar">
+            <i class="fas fa-times"></i>
+        </button>
+        <button class="visor-anterior" id="visorAnterior">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        <button class="visor-siguiente" id="visorSiguiente">
+            <i class="fas fa-chevron-right"></i>
+        </button>
+        
+        <div class="visor-contenido">
+            <img id="visorImagen" src="" alt="">
+            <video id="visorVideo" controls style="display: none;"></video>
+            
+            <div class="visor-info">
+                <h3 id="visorTitulo"></h3>
+                <p id="visorDescripcion"></p>
+                <div class="visor-fecha" id="visorFecha"></div>
+            </div>
+        </div>
+        
+        <div class="visor-contador">
+            <span id="visorActual">1</span> / <span id="visorTotal">1</span>
+        </div>
+    </div>
+
     <!-- Galería principal -->
     <main id="galeria" class="main-content">
-        <div class="filtros">
-            <button class="filtro-btn active" data-tipo="todos">
-                <i class="fas fa-th"></i> Todos
-            </button>
-            <button class="filtro-btn" data-tipo="foto">
-                <i class="fas fa-camera"></i> Fotos
-            </button>
-            <button class="filtro-btn" data-tipo="video">
-                <i class="fas fa-video"></i> Videos
-            </button>
+        <div class="filtros-contenedor">
+            <div class="filtros">
+                <button class="filtro-btn active" data-tipo="todos">
+                    <i class="fas fa-th"></i> Todos
+                </button>
+                <button class="filtro-btn" data-tipo="foto">
+                    <i class="fas fa-camera"></i> Fotos
+                </button>
+                <button class="filtro-btn" data-tipo="video">
+                    <i class="fas fa-video"></i> Videos
+                </button>
+            </div>
+            <div class="contador-filtro">
+                <span id="contadorResultados">0 recuerdos</span>
+            </div>
         </div>
 
         <div id="contenedor-galerias" class="galerias-contenedor">
@@ -107,9 +141,17 @@
                 <p>Recuerdos digitales para siempre</p>
             </div>
             <div class="stats">
-                <p id="total-fotos">Fotos: 0</p>
-                <p id="total-videos">Videos: 0</p>
-                <p id="total-recuerdos">Total: 0</p>
+                <p id="total-fotos"><i class="fas fa-camera"></i> Fotos: 0</p>
+                <p id="total-videos"><i class="fas fa-video"></i> Videos: 0</p>
+                <p id="total-recuerdos"><i class="fas fa-images"></i> Total: 0</p>
+            </div>
+            <div class="footer-links">
+                <button id="btnSubirFooter" class="btn-footer">
+                    <i class="fas fa-cloud-upload-alt"></i> Subir recuerdo
+                </button>
+                <a href="#portada" class="btn-footer">
+                    <i class="fas fa-home"></i> Inicio
+                </a>
             </div>
             <p class="creditos">Hecho con ❤️ usando Supabase + GitHub Pages</p>
         </div>
