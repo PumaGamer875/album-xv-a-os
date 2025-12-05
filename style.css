@@ -628,6 +628,23 @@ body {
     transform: none;
 }
 
+.info-compresion {
+    font-size: 0.8rem;
+    color: #4CAF50;
+    margin-top: 8px;
+    padding: 8px;
+    background: #E8F5E9;
+    border-radius: 6px;
+    border-left: 3px solid #4CAF50;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.info-compresion i {
+    color: #4CAF50;
+}
+
 /* ===== FOOTER ===== */
 footer {
     background: linear-gradient(45deg, #1a1a2e, #16213e);
@@ -850,3 +867,4 @@ footer {
 .es-movil .visor-fotos {
     background: #000;
 }
+
