@@ -15,6 +15,7 @@
         <div class="portada-contenido">
             <h1 id="titulo-portada">Mi XV Años</h1>
             <p id="subtitulo-portada">Álbum digital de recuerdos</p>
+            <p id="subtitulo-portada">XV Regina Sofia Jaimes Arias</p>
             <div class="portada-botones">
                 <button class="btn-subir" id="btnMostrarSubir">
                     <i class="fas fa-cloud-upload-alt"></i> Subir Recuerdos
@@ -46,8 +47,7 @@
                                 <i class="fas fa-info-circle"></i>
                                 Máximo 50MB por archivo
                             </p>
-                            <!-- Añade esto dentro del drop-zone, después del info-tamano -->
-                            <p class="info-compresion" style="display: none;">
+                            <p class="info-compresion">
                                 <i class="fas fa-compress-alt"></i>
                                 Las fotos se optimizarán para mejor calidad web
                             </p>
@@ -68,7 +68,7 @@
         </div>
     </div>
 
-    <!-- Visor de fotos/videos (SIN INFO, SOLO MEDIA) -->
+    <!-- Visor de fotos/videos -->
     <div class="visor-fotos" id="visorFotos">
         <button class="visor-cerrar" id="visorCerrar">
             <i class="fas fa-times"></i>
@@ -94,14 +94,14 @@
     <main id="galeria" class="main-content">
         <div class="filtros-contenedor">
             <div class="filtros">
-                <button class="filtro-btn active" data-tipo="todos">
-                    <i class="fas fa-th"></i> Todos
+                <button class="filtro-btn active" data-tipo="todos" data-orden="ascendente">
+                    <i class="fas fa-sort-amount-down-alt"></i> Cronológico
                 </button>
-                <button class="filtro-btn" data-tipo="foto">
-                    <i class="fas fa-camera"></i> Fotos
+                <button class="filtro-btn" data-tipo="foto" data-orden="descendente">
+                    <i class="fas fa-camera"></i> Fotos (recientes)
                 </button>
-                <button class="filtro-btn" data-tipo="video">
-                    <i class="fas fa-video"></i> Videos
+                <button class="filtro-btn" data-tipo="video" data-orden="descendente">
+                    <i class="fas fa-video"></i> Videos (recientes)
                 </button>
             </div>
         </div>
@@ -125,6 +125,27 @@
                 <h3><i class="fas fa-heart"></i> Álbum XV Años</h3>
                 <p>Recuerdos para siempre</p>
             </div>
+            
+            <div class="contacto-info">
+                <h4><i class="fas fa-user-tie"></i> Creador del Álbum</h4>
+                <div class="contacto-datos">
+                    <p><i class="fas fa-user"></i> <strong>Nombre:</strong> Desarrollador del Álbum</p>
+                    <p>
+                        <i class="fab fa-whatsapp"></i> <strong>WhatsApp:</strong> 
+                        <a href="https://wa.me/523921280661?text=Hola%20me%20interesa%20un%20album%20digital%20" 
+                           class="whatsapp-link" 
+                           target="_blank" 
+                           title="Contactar por WhatsApp">
+                            392 128 0661
+                        </a>
+                    </p>
+                    <p class="whatsapp-mensaje">
+                        <i class="fas fa-comment-dots"></i> 
+                        Mensaje automático: "Hola me interesa un álbum digital"
+                    </p>
+                </div>
+            </div>
+            
             <div class="footer-links">
                 <button id="btnSubirFooter" class="btn-footer">
                     <i class="fas fa-cloud-upload-alt"></i> Subir recuerdo
@@ -132,9 +153,13 @@
                 <a href="#portada" class="btn-footer">
                     <i class="fas fa-home"></i> Inicio
                 </a>
+                <button id="btnInfoContacto" class="btn-footer">
+                    <i class="fas fa-info-circle"></i> Información
+                </button>
             </div>
+            
             <p class="creditos">Álbum digital para XV años</p>
-            <p class="creditos">Quiere tu album personal, contacta al 3921280661</p>
+            <p class="creditos">¿Quieres tu álbum personalizado? Contáctame</p>
         </div>
     </footer>
 
