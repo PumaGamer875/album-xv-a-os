@@ -5,7 +5,10 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // ========== CONFIGURACIÓN APP ==========
 const CONFIG = {
     MAX_FILE_SIZE_MB: 50,
-    ALLOWED_TYPES: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp']
+    ALLOWED_TYPES: {
+        images: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'],
+        videos: ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/mpeg']
+    }
 };
 
 // ========== INICIALIZACIÓN SUPABASE ==========
@@ -39,12 +42,12 @@ const elementos = {
     progresoTexto: document.getElementById('progresoTexto'),
     contenedorGaleria: document.getElementById('contenedor-galerias'),
     btnCargarMas: document.getElementById('btnCargarMas'),
-    totalFotos: document.getElementById('total-fotos'),
-    contadorResultados: document.getElementById('contadorResultados'),
+    filtrosBtn: document.querySelectorAll('.filtro-btn'),
     btnSubirFooter: document.getElementById('btnSubirFooter'),
     // Visor
     visor: document.getElementById('visorFotos'),
     visorImagen: document.getElementById('visorImagen'),
+    visorVideo: document.getElementById('visorVideo'),
     visorActual: document.getElementById('visorActual'),
     visorTotal: document.getElementById('visorTotal'),
     visorCerrar: document.getElementById('visorCerrar'),
@@ -56,14 +59,16 @@ const elementos = {
 let fotosVisor = [];
 let indiceVisor = 0;
 let touchStartX = 0;
-let touchEndX = 0;
 
 // ========== INICIALIZAR APP ==========
 document.addEventListener('DOMContentLoaded', () => {
     console.log('📸 Iniciando álbum XV años...');
     
-    // Configurar eventos táctiles
-    configurarEventosTactiles();
+    // Detectar si es móvil
+    if (esMovil()) {
+        document.body.classList.add('es-movil');
+        console.log('📱 Modo móvil detectado');
+    }
     
     inicializarApp().catch(error => {
         console.error('❌ Error:', error);
@@ -76,7 +81,6 @@ async function inicializarApp() {
     await cargarGaleria();
     configurarEventos();
     inicializarVisor();
-    await actualizarEstadisticas();
 }
 
 // ========== CONFIGURACIÓN PORTADA ==========
@@ -126,31 +130,49 @@ function configurarEventos() {
         if (e.target === elementos.modalSubir) cerrarModal();
     });
 
-    // Selección de archivos - SOLO PARA MÓVILES
+    // Selección de archivos - FIX PARA MÓVILES (SIN CAPTURE)
     elementos.dropZone.addEventListener('click', () => {
-        // En móviles, forzar el input file
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.multiple = true;
-        input.capture = 'environment'; // Permitir usar cámara directamente
-        input.style.display = 'none';
-        
-        input.onchange = (e) => {
-            const archivos = Array.from(e.target.files);
-            procesarArchivos(archivos);
-        };
-        
-        document.body.appendChild(input);
-        input.click();
-        document.body.removeChild(input);
+        // Solo activar el input file original
+        elementos.fileInput.click();
     });
 
-    // También mantener el input original para desktop
     elementos.fileInput.addEventListener('change', manejarSeleccionArchivos);
+
+    // Drag & Drop para desktop
+    if (!esMovil()) {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            elementos.dropZone.addEventListener(eventName, prevenirDefault, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            elementos.dropZone.addEventListener(eventName, () => {
+                elementos.dropZone.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            elementos.dropZone.addEventListener(eventName, () => {
+                elementos.dropZone.classList.remove('dragover');
+            }, false);
+        });
+
+        elementos.dropZone.addEventListener('drop', manejarDrop, false);
+    }
 
     // Formulario de subida
     elementos.formSubir.addEventListener('submit', manejarSubmit);
+
+    // Filtros
+    elementos.filtrosBtn.forEach(btn => {
+        btn.addEventListener('click', () => {
+            elementos.filtrosBtn.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            estado.tipoFiltro = btn.dataset.tipo;
+            estado.paginaActual = 0;
+            elementos.contenedorGaleria.innerHTML = '';
+            cargarGaleria();
+        });
+    });
 
     // Cargar más
     elementos.btnCargarMas.addEventListener('click', () => {
@@ -159,17 +181,14 @@ function configurarEventos() {
     });
 }
 
-// ========== EVENTOS TÁCTILES ESPECIALES ==========
-function configurarEventosTactiles() {
-    // Prevenir zoom con doble toque
-    let lastTouchEnd = 0;
-    document.addEventListener('touchend', (e) => {
-        const now = Date.now();
-        if (now - lastTouchEnd <= 300) {
-            e.preventDefault();
-        }
-        lastTouchEnd = now;
-    }, { passive: false });
+function prevenirDefault(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+function manejarDrop(e) {
+    const archivos = Array.from(e.dataTransfer.files);
+    procesarArchivos(archivos);
 }
 
 function mostrarModalSubir() {
@@ -209,8 +228,9 @@ function validarArchivo(archivo) {
     const errores = [];
     
     // Validar tipo
-    if (!CONFIG.ALLOWED_TYPES.includes(archivo.type)) {
-        errores.push('Tipo de archivo no permitido. Solo imágenes (JPG, PNG, GIF)');
+    const tiposPermitidos = [...CONFIG.ALLOWED_TYPES.images, ...CONFIG.ALLOWED_TYPES.videos];
+    if (!tiposPermitidos.includes(archivo.type)) {
+        errores.push('Tipo de archivo no permitido. Solo imágenes y videos');
     }
     
     // Validar tamaño
@@ -230,7 +250,7 @@ function actualizarPreviewArchivos() {
     elementos.previewArchivos.innerHTML = '';
 
     if (estado.archivosParaSubir.length === 0) {
-        elementos.previewArchivos.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No hay fotos seleccionadas</p>';
+        elementos.previewArchivos.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No hay archivos seleccionados</p>';
         elementos.btnSubmit.disabled = true;
         return;
     }
@@ -239,10 +259,17 @@ function actualizarPreviewArchivos() {
         const previewItem = document.createElement('div');
         previewItem.className = 'preview-item';
 
-        const img = document.createElement('img');
-        img.src = URL.createObjectURL(archivo);
-        img.alt = archivo.name;
-        previewItem.appendChild(img);
+        if (archivo.type.startsWith('image/')) {
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(archivo);
+            img.alt = archivo.name;
+            previewItem.appendChild(img);
+        } else if (archivo.type.startsWith('video/')) {
+            const video = document.createElement('video');
+            video.src = URL.createObjectURL(archivo);
+            video.controls = true;
+            previewItem.appendChild(video);
+        }
 
         const btnEliminar = document.createElement('button');
         btnEliminar.className = 'eliminar';
@@ -259,7 +286,7 @@ function actualizarPreviewArchivos() {
     });
 
     elementos.btnSubmit.disabled = false;
-    elementos.btnSubmit.innerHTML = `<i class="fas fa-paper-plane"></i> Subir ${estado.archivosParaSubir.length} foto${estado.archivosParaSubir.length > 1 ? 's' : ''}`;
+    elementos.btnSubmit.innerHTML = `<i class="fas fa-paper-plane"></i> Subir ${estado.archivosParaSubir.length} archivo${estado.archivosParaSubir.length > 1 ? 's' : ''}`;
 }
 
 // ========== SUBIDA DE ARCHIVOS ==========
@@ -267,7 +294,7 @@ async function manejarSubmit(e) {
     e.preventDefault();
     
     if (estado.archivosParaSubir.length === 0) {
-        alert('📁 Selecciona al menos una foto');
+        alert('📁 Selecciona al menos un archivo');
         return;
     }
 
@@ -284,6 +311,7 @@ async function manejarSubmit(e) {
 
     for (let i = 0; i < estado.archivosParaSubir.length; i++) {
         const archivo = estado.archivosParaSubir[i];
+        const tipo = archivo.type.startsWith('image/') ? 'foto' : 'video';
 
         try {
             // Generar nombre único
@@ -307,7 +335,7 @@ async function manejarSubmit(e) {
                 .from('fotos')
                 .insert({
                     url: urlData.publicUrl,
-                    tipo: 'foto'
+                    tipo: tipo
                     // No incluir título ni descripción
                 });
 
@@ -326,7 +354,7 @@ async function manejarSubmit(e) {
         }
     }
 
-    elementos.progresoTexto.textContent = `✅ ¡Listo! ${subidasExitosas} fotos subidas`;
+    elementos.progresoTexto.textContent = `✅ ¡Listo! ${subidasExitosas} archivos subidos`;
     elementos.btnSubmit.disabled = false;
     estado.cargando = false;
 
@@ -337,7 +365,6 @@ async function manejarSubmit(e) {
         estado.paginaActual = 0;
         elementos.contenedorGaleria.innerHTML = '';
         cargarGaleria();
-        actualizarEstadisticas();
     }, 1500);
 }
 
@@ -345,7 +372,7 @@ function resetearFormulario() {
     estado.archivosParaSubir = [];
     actualizarPreviewArchivos();
     elementos.progresoContenedor.style.display = 'none';
-    elementos.btnSubmit.innerHTML = '<i class="fas fa-paper-plane"></i> Subir Fotos';
+    elementos.btnSubmit.innerHTML = '<i class="fas fa-paper-plane"></i> Subir Recuerdos';
 }
 
 // ========== GALERÍA Y VISOR ==========
@@ -354,7 +381,7 @@ async function cargarGaleria() {
         elementos.btnCargarMas.disabled = true;
         elementos.btnCargarMas.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
 
-        // Obtener TODAS las fotos
+        // Obtener TODAS las fotos/videos
         const { data: todasLasFotos, error } = await supabase
             .from('fotos')
             .select('*')
@@ -364,20 +391,23 @@ async function cargarGaleria() {
 
         estado.todasLasFotos = todasLasFotos;
         
+        // Filtrar según tipo seleccionado
+        let contenidoFiltrado = todasLasFotos;
+        if (estado.tipoFiltro !== 'todos') {
+            contenidoFiltrado = todasLasFotos.filter(item => item.tipo === estado.tipoFiltro);
+        }
+        
         // Calcular paginación
         const inicio = estado.paginaActual * estado.porPagina;
         const fin = inicio + estado.porPagina;
-        const fotosPagina = todasLasFotos.slice(inicio, fin);
+        const contenidoPagina = contenidoFiltrado.slice(inicio, fin);
 
-        // Actualizar contador
-        elementos.contadorResultados.textContent = `${todasLasFotos.length} foto${todasLasFotos.length !== 1 ? 's' : ''}`;
-
-        if (fotosPagina.length === 0 && estado.paginaActual === 0) {
+        if (contenidoPagina.length === 0 && estado.paginaActual === 0) {
             elementos.contenedorGaleria.innerHTML = `
                 <div class="no-recuerdos" style="grid-column: 1/-1; text-align: center; padding: 40px;">
                     <i class="fas fa-images fa-3x" style="color: #ccc; margin-bottom: 15px;"></i>
-                    <h3 style="color: #666; margin-bottom: 10px;">No hay fotos aún</h3>
-                    <p style="color: #888;">¡Sube la primera foto!</p>
+                    <h3 style="color: #666; margin-bottom: 10px;">No hay recuerdos aún</h3>
+                    <p style="color: #888;">¡Sube el primer recuerdo!</p>
                 </div>
             `;
             elementos.btnCargarMas.style.display = 'none';
@@ -390,14 +420,14 @@ async function cargarGaleria() {
         }
 
         // Crear elementos
-        fotosPagina.forEach((foto, index) => {
+        contenidoPagina.forEach((item, index) => {
             const indiceGlobal = inicio + index;
-            const item = crearElementoGaleria(foto, indiceGlobal);
-            elementos.contenedorGaleria.appendChild(item);
+            const elementoGaleria = crearElementoGaleria(item, indiceGlobal);
+            elementos.contenedorGaleria.appendChild(elementoGaleria);
         });
 
         // Actualizar botón cargar más
-        elementos.btnCargarMas.style.display = fotosPagina.length === estado.porPagina ? 'block' : 'none';
+        elementos.btnCargarMas.style.display = contenidoPagina.length === estado.porPagina ? 'block' : 'none';
         elementos.btnCargarMas.disabled = false;
         elementos.btnCargarMas.innerHTML = '<i class="fas fa-sync-alt"></i> Cargar más';
 
@@ -405,47 +435,69 @@ async function cargarGaleria() {
         console.error('❌ Error cargando galería:', error);
         elementos.contenedorGaleria.innerHTML = `
             <div class="error" style="grid-column: 1/-1; text-align: center; padding: 40px; color: #ff6b8b;">
-                <h3>Error al cargar las fotos</h3>
+                <h3>Error al cargar los recuerdos</h3>
                 <p>Intenta nuevamente</p>
             </div>
         `;
     }
 }
 
-function crearElementoGaleria(foto, index) {
-    const item = document.createElement('div');
-    item.className = 'item-galeria';
-    item.dataset.index = index;
+function crearElementoGaleria(item, index) {
+    const elemento = document.createElement('div');
+    elemento.className = 'item-galeria';
+    elemento.dataset.index = index;
 
-    item.innerHTML = `
-        <img src="${foto.url}" alt="Foto ${index + 1}" loading="lazy">
+    const tipoTexto = item.tipo === 'foto' ? 'Foto' : 'Video';
+    const iconoTipo = item.tipo === 'foto' ? 'fa-camera' : 'fa-video';
+
+    elemento.innerHTML = `
+        ${item.tipo === 'foto' 
+            ? `<img src="${item.url}" alt="Recuerdo ${index + 1}" loading="lazy">`
+            : `<video src="${item.url}" muted playsinline></video>`
+        }
+        <span class="tipo-badge"><i class="fas ${iconoTipo}"></i> ${tipoTexto}</span>
     `;
     
     // Evento para abrir visor
-    item.addEventListener('click', () => {
+    elemento.addEventListener('click', () => {
         abrirVisor(index);
     });
 
-    return item;
+    // Para videos en galería, autoplay en hover (solo desktop)
+    if (item.tipo === 'video' && !esMovil()) {
+        const video = elemento.querySelector('video');
+        elemento.addEventListener('mouseenter', () => {
+            video.play().catch(e => console.log('Autoplay bloqueado'));
+        });
+        
+        elemento.addEventListener('mouseleave', () => {
+            video.pause();
+            video.currentTime = 0;
+        });
+    }
+
+    return elemento;
 }
 
-// ========== SISTEMA DE VISOR PARA MÓVILES ==========
+// ========== SISTEMA DE VISOR SIMPLIFICADO ==========
 function inicializarVisor() {
     // Cerrar visor
     elementos.visorCerrar.addEventListener('click', cerrarVisor);
     elementos.visor.addEventListener('click', (e) => {
-        if (e.target === elementos.visor) cerrarVisor();
+        if (e.target === elementos.visor || e.target.classList.contains('visor-contenido')) {
+            cerrarVisor();
+        }
     });
     
     // Navegación
     elementos.visorAnterior.addEventListener('click', () => navegarVisor(-1));
     elementos.visorSiguiente.addEventListener('click', () => navegarVisor(1));
     
-    // Navegación con teclado (solo desktop)
+    // Navegación con teclado
     document.addEventListener('keydown', (e) => {
         if (!elementos.visor.classList.contains('mostrar')) return;
         
-        if (e.key === 'Escape') cerrarVisor();
+        if (e.key === 'Escape' || e.key === ' ') cerrarVisor();
         if (e.key === 'ArrowLeft') navegarVisor(-1);
         if (e.key === 'ArrowRight') navegarVisor(1);
     });
@@ -456,12 +508,12 @@ function inicializarVisor() {
     });
     
     elementos.visor.addEventListener('touchend', (e) => {
-        touchEndX = e.changedTouches[0].clientX;
-        manejarGesto();
+        const touchEndX = e.changedTouches[0].clientX;
+        manejarGesto(touchEndX);
     });
 }
 
-function manejarGesto() {
+function manejarGesto(touchEndX) {
     const minSwipeDistance = 50;
     const distance = touchStartX - touchEndX;
     
@@ -477,28 +529,33 @@ function manejarGesto() {
 }
 
 function abrirVisor(indice) {
-    fotosVisor = estado.todasLasFotos;
-    indiceVisor = indice;
+    // Filtrar según tipo seleccionado
+    let contenidoFiltrado = estado.todasLasFotos;
+    if (estado.tipoFiltro !== 'todos') {
+        contenidoFiltrado = estado.todasLasFotos.filter(item => item.tipo === estado.tipoFiltro);
+    }
     
+    fotosVisor = contenidoFiltrado;
+    
+    // Encontrar el índice correcto en el contenido filtrado
+    const itemSeleccionado = estado.todasLasFotos[indice];
+    indiceVisor = fotosVisor.findIndex(item => item.id === itemSeleccionado.id);
+    
+    if (indiceVisor === -1) indiceVisor = 0;
     if (fotosVisor.length === 0) return;
     
-    mostrarFotoVisor();
+    mostrarMediaVisor();
     elementos.visor.classList.add('mostrar');
     document.body.style.overflow = 'hidden';
-    
-    // Prevenir scroll en móviles
-    document.addEventListener('touchmove', prevenirScrollVisor, { passive: false });
 }
 
 function cerrarVisor() {
     elementos.visor.classList.remove('mostrar');
     document.body.style.overflow = '';
-    document.removeEventListener('touchmove', prevenirScrollVisor);
-}
-
-function prevenirScrollVisor(e) {
-    if (elementos.visor.classList.contains('mostrar')) {
-        e.preventDefault();
+    
+    // Pausar video si está reproduciendo
+    if (!elementos.visorVideo.paused) {
+        elementos.visorVideo.pause();
     }
 }
 
@@ -509,38 +566,29 @@ function navegarVisor(direccion) {
     if (indiceVisor < 0) indiceVisor = fotosVisor.length - 1;
     if (indiceVisor >= fotosVisor.length) indiceVisor = 0;
     
-    mostrarFotoVisor();
+    mostrarMediaVisor();
 }
 
-function mostrarFotoVisor() {
-    const foto = fotosVisor[indiceVisor];
+function mostrarMediaVisor() {
+    const item = fotosVisor[indiceVisor];
     
-    elementos.visorImagen.src = foto.url;
-    elementos.visorImagen.alt = `Foto ${indiceVisor + 1}`;
+    if (item.tipo === 'foto') {
+        elementos.visorImagen.src = item.url;
+        elementos.visorImagen.style.display = 'block';
+        elementos.visorVideo.style.display = 'none';
+        elementos.visorVideo.src = '';
+    } else {
+        elementos.visorVideo.src = item.url;
+        elementos.visorVideo.style.display = 'block';
+        elementos.visorImagen.style.display = 'none';
+        elementos.visorImagen.src = '';
+        elementos.visorVideo.load();
+        elementos.visorVideo.play().catch(e => console.log('Autoplay bloqueado en visor'));
+    }
     
     // Actualizar contador
     elementos.visorActual.textContent = indiceVisor + 1;
     elementos.visorTotal.textContent = fotosVisor.length;
-}
-
-// ========== ESTADÍSTICAS ==========
-async function actualizarEstadisticas() {
-    try {
-        const { count: totalFotos } = await supabase
-            .from('fotos')
-            .select('*', { count: 'exact', head: true });
-
-        elementos.totalFotos.innerHTML = `<i class="fas fa-camera"></i> Fotos: ${totalFotos || 0}`;
-
-    } catch (error) {
-        console.error('❌ Error estadísticas:', error);
-    }
-}
-
-// ========== MANEJO DE ERRORES ==========
-function mostrarErrorInicial() {
-    elementos.tituloPortada.textContent = 'Álbum XV Años';
-    elementos.subtituloPortada.textContent = 'Cargando...';
 }
 
 // ========== DETECCIÓN DE DISPOSITIVO ==========
@@ -548,10 +596,10 @@ function esMovil() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
-// Detectar si es móvil y aplicar ajustes
-if (esMovil()) {
-    document.body.classList.add('es-movil');
-    console.log('📱 Modo móvil activado');
+// ========== MANEJO DE ERRORES ==========
+function mostrarErrorInicial() {
+    elementos.tituloPortada.textContent = 'Álbum XV Años';
+    elementos.subtituloPortada.textContent = 'Cargando...';
 }
 
 // Cargar fuentes
