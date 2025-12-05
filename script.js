@@ -1,11 +1,12 @@
-// Configuración de Supabase
+// ========== CONFIGURACIÓN SUPABASE ==========
+// ¡REEMPLAZA EL ANON KEY CON TU LLAVE REAL!
 const SUPABASE_URL = 'https://tvqwbvdzjtyzsfegyuzl.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR2cXdidmR6anR5enNmZWd5dXpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MjE5MDMsImV4cCI6MjA4MDQ5NzkwM30.JnE9FJFoeaULaddBWgXigGmvuKY56FjWID0fsAGkmgI';
 
-// Inicializar Supabase
+// ========== INICIALIZACIÓN ==========
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Estado de la aplicación
+// ========== ESTADO ==========
 const estado = {
     paginaActual: 0,
     porPagina: 12,
@@ -14,7 +15,7 @@ const estado = {
     cargando: false
 };
 
-// Elementos del DOM
+// ========== ELEMENTOS DOM ==========
 const elementos = {
     portada: document.getElementById('portada'),
     tituloPortada: document.getElementById('titulo-portada'),
@@ -38,61 +39,81 @@ const elementos = {
     totalRecuerdos: document.getElementById('total-recuerdos')
 };
 
-// Inicializar la aplicación
-document.addEventListener('DOMContentLoaded', inicializarApp);
+// ========== INICIALIZAR APP ==========
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('Iniciando aplicación...');
+    console.log('URL Supabase:', SUPABASE_URL);
+    console.log('Anon Key:', SUPABASE_ANON_KEY ? 'Configurada' : 'Falta');
+    
+    inicializarApp().catch(error => {
+        console.error('Error inicializando app:', error);
+        mostrarErrorInicial();
+    });
+});
 
 async function inicializarApp() {
     await cargarConfiguracion();
     await cargarGaleria();
     configurarEventos();
-    actualizarEstadisticas();
+    await actualizarEstadisticas();
 }
 
-// ========== CONFIGURACIÓN DE PORTADA ==========
+// ========== CONFIGURACIÓN PORTADA ==========
 async function cargarConfiguracion() {
     try {
+        console.log('Cargando configuración...');
         const { data: config, error } = await supabase
             .from('configuracion')
             .select('*');
 
-        if (error) throw error;
+        if (error) {
+            console.error('Error Supabase:', error);
+            throw error;
+        }
 
-        config.forEach(item => {
-            switch(item.clave) {
-                case 'portada_url':
-                    if (item.valor) {
-                        elementos.portada.style.setProperty('--portada-imagen', `url('${item.valor}')`);
-                    }
-                    break;
-                case 'titulo_portada':
-                    elementos.tituloPortada.textContent = item.valor || 'Mi XV Años';
-                    break;
-                case 'subtitulo_portada':
-                    elementos.subtituloPortada.textContent = item.valor || 'Álbum de Recuerdos';
-                    break;
-            }
-        });
+        console.log('Configuración cargada:', config);
+
+        if (config && config.length > 0) {
+            config.forEach(item => {
+                switch(item.clave) {
+                    case 'portada_url':
+                        if (item.valor) {
+                            elementos.portada.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.5)), url('${item.valor}')`;
+                        }
+                        break;
+                    case 'titulo_portada':
+                        elementos.tituloPortada.textContent = item.valor || 'Mi XV Años';
+                        break;
+                    case 'subtitulo_portada':
+                        elementos.subtituloPortada.textContent = item.valor || 'Álbum de Recuerdos';
+                        break;
+                }
+            });
+        } else {
+            // Configuración por defecto
+            elementos.tituloPortada.textContent = 'Álbum XV Años';
+            elementos.subtituloPortada.textContent = 'Bienvenido a mis recuerdos';
+        }
     } catch (error) {
         console.error('Error cargando configuración:', error);
         elementos.tituloPortada.textContent = 'Álbum XV Años';
-        elementos.subtituloPortada.textContent = 'Bienvenido a mis recuerdos';
+        elementos.subtituloPortada.textContent = 'Configura la base de datos';
     }
 }
 
-// ========== SISTEMA DE SUBIDA ==========
+// ========== FUNCIONES DE SUBIDA ==========
 function configurarEventos() {
-    // Mostrar modal de subida
+    // Modal
     elementos.btnMostrarSubir.addEventListener('click', () => {
         elementos.modalSubir.classList.add('mostrar');
     });
 
-    // Cerrar modal
     elementos.btnCerrarModal.addEventListener('click', cerrarModal);
     elementos.modalSubir.addEventListener('click', (e) => {
         if (e.target === elementos.modalSubir) cerrarModal();
     });
 
-    // Selección de archivos
+    // Archivos
     elementos.dropZone.addEventListener('click', () => elementos.fileInput.click());
     elementos.fileInput.addEventListener('change', manejarSeleccionArchivos);
 
@@ -102,16 +123,20 @@ function configurarEventos() {
     });
 
     ['dragenter', 'dragover'].forEach(eventName => {
-        elementos.dropZone.addEventListener(eventName, resaltarDropZone, false);
+        elementos.dropZone.addEventListener(eventName, () => {
+            elementos.dropZone.classList.add('dragover');
+        }, false);
     });
 
     ['dragleave', 'drop'].forEach(eventName => {
-        elementos.dropZone.addEventListener(eventName, quitarResaltadoDropZone, false);
+        elementos.dropZone.addEventListener(eventName, () => {
+            elementos.dropZone.classList.remove('dragover');
+        }, false);
     });
 
     elementos.dropZone.addEventListener('drop', manejarDrop, false);
 
-    // Formulario de subida
+    // Formulario
     elementos.formSubir.addEventListener('submit', manejarSubmit);
 
     // Filtros
@@ -138,14 +163,6 @@ function prevenirDefault(e) {
     e.stopPropagation();
 }
 
-function resaltarDropZone() {
-    elementos.dropZone.classList.add('dragover');
-}
-
-function quitarResaltadoDropZone() {
-    elementos.dropZone.classList.remove('dragover');
-}
-
 function manejarDrop(e) {
     const archivos = Array.from(e.dataTransfer.files);
     procesarArchivos(archivos);
@@ -158,15 +175,15 @@ function manejarSeleccionArchivos(e) {
 
 function procesarArchivos(archivos) {
     archivos.forEach(archivo => {
-        // Validar tipo de archivo
+        // Validar tipo
         if (!archivo.type.startsWith('image/') && !archivo.type.startsWith('video/')) {
-            alert(`El archivo "${archivo.name}" no es una imagen ni video válido.`);
+            alert(`"${archivo.name}" no es una imagen ni video.`);
             return;
         }
 
-        // Validar tamaño (máximo 20MB)
+        // Validar tamaño (20MB máximo)
         if (archivo.size > 20 * 1024 * 1024) {
-            alert(`El archivo "${archivo.name}" es demasiado grande (máximo 20MB).`);
+            alert(`"${archivo.name}" es muy grande (máximo 20MB).`);
             return;
         }
 
@@ -207,7 +224,6 @@ function actualizarPreviewArchivos() {
         elementos.previewArchivos.appendChild(previewItem);
     });
 
-    // Actualizar estado del botón de submit
     elementos.btnSubmit.disabled = estado.archivosParaSubir.length === 0;
 }
 
@@ -215,7 +231,7 @@ async function manejarSubmit(e) {
     e.preventDefault();
     
     if (estado.archivosParaSubir.length === 0) {
-        alert('Por favor, selecciona al menos un archivo.');
+        alert('Selecciona al menos un archivo.');
         return;
     }
 
@@ -225,7 +241,7 @@ async function manejarSubmit(e) {
     elementos.btnSubmit.disabled = true;
     elementos.progresoContenedor.style.display = 'block';
     elementos.progresoBar.style.width = '0%';
-    elementos.progresoTexto.textContent = 'Preparando subida...';
+    elementos.progresoTexto.textContent = 'Preparando...';
 
     const titulo = document.getElementById('titulo').value;
     const descripcion = document.getElementById('descripcion').value;
@@ -238,9 +254,10 @@ async function manejarSubmit(e) {
         const tipo = archivo.type.startsWith('image/') ? 'foto' : 'video';
 
         try {
-            // Subir a Storage de Supabase
-            const nombreArchivo = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${archivo.name}`;
-            const { data: uploadData, error: uploadError } = await supabase.storage
+            // Subir a Storage
+            const nombreArchivo = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${archivo.name.replace(/\s/g, '_')}`;
+            
+            const { error: uploadError } = await supabase.storage
                 .from('fotos-album')
                 .upload(nombreArchivo, archivo);
 
@@ -251,7 +268,7 @@ async function manejarSubmit(e) {
                 .from('fotos-album')
                 .getPublicUrl(nombreArchivo);
 
-            // Guardar en base de datos
+            // Guardar en BD
             const { error: dbError } = await supabase
                 .from('fotos')
                 .insert({
@@ -271,17 +288,15 @@ async function manejarSubmit(e) {
             elementos.progresoTexto.textContent = `Subiendo... ${subidasExitosas}/${totalArchivos}`;
 
         } catch (error) {
-            console.error('Error subiendo archivo:', error);
-            alert(`Error al subir "${archivo.name}": ${error.message}`);
+            console.error('Error subiendo:', error);
+            alert(`Error con "${archivo.name}": ${error.message}`);
         }
     }
 
-    // Finalizar
-    elementos.progresoTexto.textContent = `¡Listo! ${subidasExitosas} archivos subidos exitosamente.`;
+    elementos.progresoTexto.textContent = `¡Listo! ${subidasExitosas} archivos subidos.`;
     elementos.btnSubmit.disabled = false;
     estado.cargando = false;
 
-    // Resetear formulario después de 2 segundos
     setTimeout(() => {
         resetearFormulario();
         cerrarModal();
@@ -332,35 +347,28 @@ async function cargarGaleria() {
                 <div class="no-recuerdos" style="grid-column: 1/-1; text-align: center; padding: 50px;">
                     <i class="fas fa-images fa-4x" style="color: #ccc; margin-bottom: 20px;"></i>
                     <h3 style="color: #666; margin-bottom: 15px;">No hay recuerdos aún</h3>
-                    <p style="color: #888;">¡Sé el primero en subir una foto o video!</p>
-                    <button class="btn-subir" onclick="document.getElementById('btnMostrarSubir').click()" 
-                            style="margin-top: 20px;">
-                        <i class="fas fa-cloud-upload-alt"></i> Subir el primer recuerdo
-                    </button>
+                    <p style="color: #888;">¡Sube la primera foto o video!</p>
                 </div>
             `;
             elementos.btnCargarMas.style.display = 'none';
             return;
         }
 
-        // Mostrar recuerdos
         recuerdos.forEach(recuerdo => {
             const item = crearElementoRecuerdo(recuerdo);
             elementos.contenedorGaleria.appendChild(item);
         });
 
-        // Mostrar/ocultar botón "Cargar más"
         elementos.btnCargarMas.style.display = recuerdos.length === estado.porPagina ? 'block' : 'none';
         elementos.btnCargarMas.disabled = false;
-        elementos.btnCargarMas.innerHTML = '<i class="fas fa-sync-alt"></i> Cargar más recuerdos';
+        elementos.btnCargarMas.innerHTML = '<i class="fas fa-sync-alt"></i> Cargar más';
 
     } catch (error) {
         console.error('Error cargando galería:', error);
         elementos.contenedorGaleria.innerHTML = `
             <div class="error" style="grid-column: 1/-1; text-align: center; padding: 50px; color: #ff6b8b;">
-                <i class="fas fa-exclamation-triangle fa-3x"></i>
-                <h3>Error al cargar los recuerdos</h3>
-                <p>Por favor, intenta nuevamente más tarde.</p>
+                <h3>Error cargando recuerdos</h3>
+                <p>Verifica la conexión o configuración.</p>
             </div>
         `;
     }
@@ -383,7 +391,7 @@ function crearElementoRecuerdo(recuerdo) {
         <div class="media-container">
             ${recuerdo.tipo === 'foto' 
                 ? `<img src="${recuerdo.url}" alt="${recuerdo.titulo || 'Recuerdo'}" loading="lazy">`
-                : `<video src="${recuerdo.url}" controls poster="${recuerdo.url}?thumb=1"></video>`
+                : `<video src="${recuerdo.url}" controls></video>`
             }
             <span class="tipo-badge"><i class="fas ${iconoTipo}"></i> ${tipoTexto}</span>
         </div>
@@ -402,47 +410,61 @@ function crearElementoRecuerdo(recuerdo) {
 // ========== ESTADÍSTICAS ==========
 async function actualizarEstadisticas() {
     try {
-        // Contar fotos
-        const { count: totalFotos, error: errorFotos } = await supabase
+        const { count: totalFotos } = await supabase
             .from('fotos')
             .select('*', { count: 'exact', head: true })
             .eq('tipo', 'foto');
 
-        // Contar videos
-        const { count: totalVideos, error: errorVideos } = await supabase
+        const { count: totalVideos } = await supabase
             .from('fotos')
             .select('*', { count: 'exact', head: true })
             .eq('tipo', 'video');
-
-        if (errorFotos || errorVideos) throw errorFotos || errorVideos;
 
         elementos.totalFotos.textContent = `Fotos: ${totalFotos || 0}`;
         elementos.totalVideos.textContent = `Videos: ${totalVideos || 0}`;
         elementos.totalRecuerdos.textContent = `Total: ${(totalFotos || 0) + (totalVideos || 0)}`;
 
     } catch (error) {
-        console.error('Error cargando estadísticas:', error);
+        console.error('Error estadísticas:', error);
     }
 }
 
-// ========== CONFIGURACIÓN INICIAL EN SUPABASE ==========
-/*
-PASOS PARA CONFIGURAR EN SUPABASE:
+// ========== MANEJO DE ERRORES ==========
+function mostrarErrorInicial() {
+    elementos.tituloPortada.textContent = 'Error de Configuración';
+    elementos.subtituloPortada.textContent = 'Revisa la consola para más detalles';
+    
+    elementos.contenedorGaleria.innerHTML = `
+        <div style="text-align: center; padding: 50px;">
+            <h3 style="color: #ff6b8b;">Error de configuración</h3>
+            <p>Verifica que:</p>
+            <ul style="text-align: left; display: inline-block;">
+                <li>Las credenciales de Supabase sean correctas</li>
+                <li>Las tablas estén creadas</li>
+                <li>Las políticas de seguridad estén configuradas</li>
+            </ul>
+        </div>
+    `;
+}
 
-1. Ve a Authentication → Policies
-   - Habilita políticas para la tabla 'fotos':
-     * INSERT: true para todos (anon)
-     * SELECT: true para todos (anon)
+// ========== PRUEBA DE CONEXIÓN ==========
+async function probarConexion() {
+    try {
+        console.log('🔍 Probando conexión a Supabase...');
+        const { data, error } = await supabase.from('configuracion').select('count');
+        
+        if (error) {
+            console.error('❌ Error de conexión:', error.message);
+            return false;
+        }
+        
+        console.log('✅ Conexión exitosa');
+        return true;
+    } catch (err) {
+        console.error('❌ Error general:', err);
+        return false;
+    }
+}
 
-2. Ve a Storage → fotos-album → Policies
-   - Crea políticas para el bucket:
-     * SELECT: true para todos
-     * INSERT: true para todos
-
-3. En la tabla 'configuracion', inserta tu portada:
-   INSERT INTO configuracion (clave, valor) VALUES
-   ('portada_url', 'https://tuservidor.com/tu-portada.jpg'),
-   ('titulo_portada', 'Mis XV Años'),
-   ('subtitulo_portada', 'Un día inolvidable');
-*/
-
+// Ejecutar prueba al cargar
+probarConexion();
