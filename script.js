@@ -147,4 +147,421 @@ function configurarEventos() {
     });
 
     // También mantener el input original para desktop
-    elementos.fileInput.addEventListener('change',
+    elementos.fileInput.addEventListener('change', manejarSeleccionArchivos);
+
+    // Formulario de subida
+    elementos.formSubir.addEventListener('submit', manejarSubmit);
+
+    // Cargar más
+    elementos.btnCargarMas.addEventListener('click', () => {
+        estado.paginaActual++;
+        cargarGaleria();
+    });
+}
+
+// ========== EVENTOS TÁCTILES ESPECIALES ==========
+function configurarEventosTactiles() {
+    // Prevenir zoom con doble toque
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+            e.preventDefault();
+        }
+        lastTouchEnd = now;
+    }, { passive: false });
+}
+
+function mostrarModalSubir() {
+    elementos.modalSubir.classList.add('mostrar');
+    document.body.style.overflow = 'hidden';
+}
+
+function cerrarModal() {
+    elementos.modalSubir.classList.remove('mostrar');
+    document.body.style.overflow = '';
+    resetearFormulario();
+}
+
+// ========== MANEJO DE ARCHIVOS ==========
+function manejarSeleccionArchivos(e) {
+    const archivos = Array.from(e.target.files);
+    procesarArchivos(archivos);
+}
+
+function procesarArchivos(archivos) {
+    archivos.forEach(archivo => {
+        const validacion = validarArchivo(archivo);
+        
+        if (!validacion.valido) {
+            alert(`❌ Error: "${archivo.name}"\n${validacion.errores.join('\n')}`);
+            return;
+        }
+
+        estado.archivosParaSubir.push(archivo);
+    });
+
+    actualizarPreviewArchivos();
+    elementos.fileInput.value = '';
+}
+
+function validarArchivo(archivo) {
+    const errores = [];
+    
+    // Validar tipo
+    if (!CONFIG.ALLOWED_TYPES.includes(archivo.type)) {
+        errores.push('Tipo de archivo no permitido. Solo imágenes (JPG, PNG, GIF)');
+    }
+    
+    // Validar tamaño
+    const maxBytes = CONFIG.MAX_FILE_SIZE_MB * 1024 * 1024;
+    if (archivo.size > maxBytes) {
+        const tamañoMB = (archivo.size / (1024 * 1024)).toFixed(1);
+        errores.push(`Muy grande: ${tamañoMB}MB (máximo: ${CONFIG.MAX_FILE_SIZE_MB}MB)`);
+    }
+    
+    return {
+        valido: errores.length === 0,
+        errores: errores
+    };
+}
+
+function actualizarPreviewArchivos() {
+    elementos.previewArchivos.innerHTML = '';
+
+    if (estado.archivosParaSubir.length === 0) {
+        elementos.previewArchivos.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No hay fotos seleccionadas</p>';
+        elementos.btnSubmit.disabled = true;
+        return;
+    }
+
+    estado.archivosParaSubir.forEach((archivo, index) => {
+        const previewItem = document.createElement('div');
+        previewItem.className = 'preview-item';
+
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(archivo);
+        img.alt = archivo.name;
+        previewItem.appendChild(img);
+
+        const btnEliminar = document.createElement('button');
+        btnEliminar.className = 'eliminar';
+        btnEliminar.innerHTML = '×';
+        btnEliminar.title = 'Eliminar';
+        btnEliminar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            estado.archivosParaSubir.splice(index, 1);
+            actualizarPreviewArchivos();
+        });
+
+        previewItem.appendChild(btnEliminar);
+        elementos.previewArchivos.appendChild(previewItem);
+    });
+
+    elementos.btnSubmit.disabled = false;
+    elementos.btnSubmit.innerHTML = `<i class="fas fa-paper-plane"></i> Subir ${estado.archivosParaSubir.length} foto${estado.archivosParaSubir.length > 1 ? 's' : ''}`;
+}
+
+// ========== SUBIDA DE ARCHIVOS ==========
+async function manejarSubmit(e) {
+    e.preventDefault();
+    
+    if (estado.archivosParaSubir.length === 0) {
+        alert('📁 Selecciona al menos una foto');
+        return;
+    }
+
+    if (estado.cargando) return;
+    
+    estado.cargando = true;
+    elementos.btnSubmit.disabled = true;
+    elementos.progresoContenedor.style.display = 'block';
+    elementos.progresoBar.style.width = '0%';
+    elementos.progresoTexto.textContent = 'Preparando...';
+
+    let subidasExitosas = 0;
+    const totalArchivos = estado.archivosParaSubir.length;
+
+    for (let i = 0; i < estado.archivosParaSubir.length; i++) {
+        const archivo = estado.archivosParaSubir[i];
+
+        try {
+            // Generar nombre único
+            const extension = archivo.name.split('.').pop().toLowerCase();
+            const nombreArchivo = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${extension}`;
+            
+            // Subir a Storage
+            const { error: uploadError } = await supabase.storage
+                .from('fotos-album')
+                .upload(nombreArchivo, archivo);
+
+            if (uploadError) throw uploadError;
+
+            // Obtener URL pública
+            const { data: urlData } = supabase.storage
+                .from('fotos-album')
+                .getPublicUrl(nombreArchivo);
+
+            // Guardar en base de datos (SIN TÍTULO NI DESCRIPCIÓN)
+            const { error: dbError } = await supabase
+                .from('fotos')
+                .insert({
+                    url: urlData.publicUrl,
+                    tipo: 'foto'
+                    // No incluir título ni descripción
+                });
+
+            if (dbError) throw dbError;
+
+            subidasExitosas++;
+
+            // Actualizar progreso
+            const progreso = Math.round((subidasExitosas / totalArchivos) * 100);
+            elementos.progresoBar.style.width = `${progreso}%`;
+            elementos.progresoTexto.textContent = `Subiendo... ${subidasExitosas}/${totalArchivos}`;
+
+        } catch (error) {
+            console.error('❌ Error:', error);
+            alert(`Error al subir "${archivo.name}"`);
+        }
+    }
+
+    elementos.progresoTexto.textContent = `✅ ¡Listo! ${subidasExitosas} fotos subidas`;
+    elementos.btnSubmit.disabled = false;
+    estado.cargando = false;
+
+    // Resetear y actualizar
+    setTimeout(() => {
+        resetearFormulario();
+        cerrarModal();
+        estado.paginaActual = 0;
+        elementos.contenedorGaleria.innerHTML = '';
+        cargarGaleria();
+        actualizarEstadisticas();
+    }, 1500);
+}
+
+function resetearFormulario() {
+    estado.archivosParaSubir = [];
+    actualizarPreviewArchivos();
+    elementos.progresoContenedor.style.display = 'none';
+    elementos.btnSubmit.innerHTML = '<i class="fas fa-paper-plane"></i> Subir Fotos';
+}
+
+// ========== GALERÍA Y VISOR ==========
+async function cargarGaleria() {
+    try {
+        elementos.btnCargarMas.disabled = true;
+        elementos.btnCargarMas.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
+
+        // Obtener TODAS las fotos
+        const { data: todasLasFotos, error } = await supabase
+            .from('fotos')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        estado.todasLasFotos = todasLasFotos;
+        
+        // Calcular paginación
+        const inicio = estado.paginaActual * estado.porPagina;
+        const fin = inicio + estado.porPagina;
+        const fotosPagina = todasLasFotos.slice(inicio, fin);
+
+        // Actualizar contador
+        elementos.contadorResultados.textContent = `${todasLasFotos.length} foto${todasLasFotos.length !== 1 ? 's' : ''}`;
+
+        if (fotosPagina.length === 0 && estado.paginaActual === 0) {
+            elementos.contenedorGaleria.innerHTML = `
+                <div class="no-recuerdos" style="grid-column: 1/-1; text-align: center; padding: 40px;">
+                    <i class="fas fa-images fa-3x" style="color: #ccc; margin-bottom: 15px;"></i>
+                    <h3 style="color: #666; margin-bottom: 10px;">No hay fotos aún</h3>
+                    <p style="color: #888;">¡Sube la primera foto!</p>
+                </div>
+            `;
+            elementos.btnCargarMas.style.display = 'none';
+            return;
+        }
+
+        // Limpiar contenedor si es primera página
+        if (estado.paginaActual === 0) {
+            elementos.contenedorGaleria.innerHTML = '';
+        }
+
+        // Crear elementos
+        fotosPagina.forEach((foto, index) => {
+            const indiceGlobal = inicio + index;
+            const item = crearElementoGaleria(foto, indiceGlobal);
+            elementos.contenedorGaleria.appendChild(item);
+        });
+
+        // Actualizar botón cargar más
+        elementos.btnCargarMas.style.display = fotosPagina.length === estado.porPagina ? 'block' : 'none';
+        elementos.btnCargarMas.disabled = false;
+        elementos.btnCargarMas.innerHTML = '<i class="fas fa-sync-alt"></i> Cargar más';
+
+    } catch (error) {
+        console.error('❌ Error cargando galería:', error);
+        elementos.contenedorGaleria.innerHTML = `
+            <div class="error" style="grid-column: 1/-1; text-align: center; padding: 40px; color: #ff6b8b;">
+                <h3>Error al cargar las fotos</h3>
+                <p>Intenta nuevamente</p>
+            </div>
+        `;
+    }
+}
+
+function crearElementoGaleria(foto, index) {
+    const item = document.createElement('div');
+    item.className = 'item-galeria';
+    item.dataset.index = index;
+
+    item.innerHTML = `
+        <img src="${foto.url}" alt="Foto ${index + 1}" loading="lazy">
+    `;
+    
+    // Evento para abrir visor
+    item.addEventListener('click', () => {
+        abrirVisor(index);
+    });
+
+    return item;
+}
+
+// ========== SISTEMA DE VISOR PARA MÓVILES ==========
+function inicializarVisor() {
+    // Cerrar visor
+    elementos.visorCerrar.addEventListener('click', cerrarVisor);
+    elementos.visor.addEventListener('click', (e) => {
+        if (e.target === elementos.visor) cerrarVisor();
+    });
+    
+    // Navegación
+    elementos.visorAnterior.addEventListener('click', () => navegarVisor(-1));
+    elementos.visorSiguiente.addEventListener('click', () => navegarVisor(1));
+    
+    // Navegación con teclado (solo desktop)
+    document.addEventListener('keydown', (e) => {
+        if (!elementos.visor.classList.contains('mostrar')) return;
+        
+        if (e.key === 'Escape') cerrarVisor();
+        if (e.key === 'ArrowLeft') navegarVisor(-1);
+        if (e.key === 'ArrowRight') navegarVisor(1);
+    });
+    
+    // Navegación con gestos táctiles
+    elementos.visor.addEventListener('touchstart', (e) => {
+        touchStartX = e.touches[0].clientX;
+    });
+    
+    elementos.visor.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].clientX;
+        manejarGesto();
+    });
+}
+
+function manejarGesto() {
+    const minSwipeDistance = 50;
+    const distance = touchStartX - touchEndX;
+    
+    if (Math.abs(distance) < minSwipeDistance) return;
+    
+    if (distance > 0) {
+        // Swipe izquierda = siguiente
+        navegarVisor(1);
+    } else {
+        // Swipe derecha = anterior
+        navegarVisor(-1);
+    }
+}
+
+function abrirVisor(indice) {
+    fotosVisor = estado.todasLasFotos;
+    indiceVisor = indice;
+    
+    if (fotosVisor.length === 0) return;
+    
+    mostrarFotoVisor();
+    elementos.visor.classList.add('mostrar');
+    document.body.style.overflow = 'hidden';
+    
+    // Prevenir scroll en móviles
+    document.addEventListener('touchmove', prevenirScrollVisor, { passive: false });
+}
+
+function cerrarVisor() {
+    elementos.visor.classList.remove('mostrar');
+    document.body.style.overflow = '';
+    document.removeEventListener('touchmove', prevenirScrollVisor);
+}
+
+function prevenirScrollVisor(e) {
+    if (elementos.visor.classList.contains('mostrar')) {
+        e.preventDefault();
+    }
+}
+
+function navegarVisor(direccion) {
+    indiceVisor += direccion;
+    
+    // Navegación circular
+    if (indiceVisor < 0) indiceVisor = fotosVisor.length - 1;
+    if (indiceVisor >= fotosVisor.length) indiceVisor = 0;
+    
+    mostrarFotoVisor();
+}
+
+function mostrarFotoVisor() {
+    const foto = fotosVisor[indiceVisor];
+    
+    elementos.visorImagen.src = foto.url;
+    elementos.visorImagen.alt = `Foto ${indiceVisor + 1}`;
+    
+    // Actualizar contador
+    elementos.visorActual.textContent = indiceVisor + 1;
+    elementos.visorTotal.textContent = fotosVisor.length;
+}
+
+// ========== ESTADÍSTICAS ==========
+async function actualizarEstadisticas() {
+    try {
+        const { count: totalFotos } = await supabase
+            .from('fotos')
+            .select('*', { count: 'exact', head: true });
+
+        elementos.totalFotos.innerHTML = `<i class="fas fa-camera"></i> Fotos: ${totalFotos || 0}`;
+
+    } catch (error) {
+        console.error('❌ Error estadísticas:', error);
+    }
+}
+
+// ========== MANEJO DE ERRORES ==========
+function mostrarErrorInicial() {
+    elementos.tituloPortada.textContent = 'Álbum XV Años';
+    elementos.subtituloPortada.textContent = 'Cargando...';
+}
+
+// ========== DETECCIÓN DE DISPOSITIVO ==========
+function esMovil() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// Detectar si es móvil y aplicar ajustes
+if (esMovil()) {
+    document.body.classList.add('es-movil');
+    console.log('📱 Modo móvil activado');
+}
+
+// Cargar fuentes
+function cargarFuentes() {
+    if (!document.querySelector('link[href*="fonts.googleapis.com"]')) {
+        const link = document.createElement('link');
+        link.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;500;600&display=swap';
+        link.rel = 'stylesheet';
+        document.head.appendChild(link);
+    }
+}
+
+cargarFuentes();
