@@ -4,43 +4,113 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Álbum XV Años</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
-    <!-- Incluir Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://tvqwbvdzjtyzsfegyuzl.supabase.co"></script>
 </head>
 <body>
-    <header>
-        <h1>🌟 Mi XV Años 🌟</h1>
-        <p>Recuerdos especiales de un día mágico</p>
-    </header>
+    <!-- Portada con imagen desde Supabase -->
+    <section id="portada" class="portada">
+        <div class="portada-contenido">
+            <h1 id="titulo-portada">Cargando...</h1>
+            <p id="subtitulo-portada">Álbum digital de recuerdos</p>
+            <button class="btn-subir" id="btnMostrarSubir">
+                <i class="fas fa-cloud-upload-alt"></i> Subir Recuerdos
+            </button>
+            <a href="#galeria" class="btn-ver-galeria">
+                <i class="fas fa-images"></i> Ver Galería
+            </a>
+        </div>
+        <div class="portada-overlay"></div>
+    </section>
 
-    <main>
-        <!-- Filtros por categoría -->
+    <!-- Modal para subir archivos -->
+    <div class="modal" id="modalSubir">
+        <div class="modal-contenido">
+            <div class="modal-header">
+                <h2><i class="fas fa-plus-circle"></i> Subir Recuerdos</h2>
+                <button class="cerrar-modal" id="btnCerrarModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Formulario de subida -->
+                <form id="formSubir">
+                    <div class="input-group">
+                        <label for="titulo"><i class="fas fa-heading"></i> Título (opcional)</label>
+                        <input type="text" id="titulo" placeholder="Ej: Mi vestido, La torta...">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="descripcion"><i class="fas fa-comment-alt"></i> Descripción (opcional)</label>
+                        <textarea id="descripcion" rows="3" placeholder="Cuenta algo especial de este momento..."></textarea>
+                    </div>
+
+                    <div class="input-group">
+                        <label><i class="fas fa-file-upload"></i> Seleccionar archivos</label>
+                        <div class="drop-zone" id="dropZone">
+                            <i class="fas fa-cloud-upload-alt fa-3x"></i>
+                            <p>Arrastra y suelta fotos/videos aquí</p>
+                            <p>o haz clic para seleccionar</p>
+                            <input type="file" id="fileInput" multiple accept="image/*,video/*">
+                        </div>
+                        <div id="previewArchivos" class="preview-archivos"></div>
+                    </div>
+
+                    <div class="progreso-contenedor" id="progresoContenedor" style="display: none;">
+                        <div class="progreso-bar" id="progresoBar"></div>
+                        <p id="progresoTexto">Subiendo...</p>
+                    </div>
+
+                    <button type="submit" class="btn-submit" id="btnSubmit">
+                        <i class="fas fa-paper-plane"></i> Subir Recuerdos
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Galería principal -->
+    <main id="galeria" class="main-content">
         <div class="filtros">
-            <button class="filtro-btn active" data-categoria="todas">Todas</button>
-            <button class="filtro-btn" data-categoria="preparacion">Preparación</button>
-            <button class="filtro-btn" data-categoria="ceremonia">Ceremonia</button>
-            <button class="filtro-btn" data-categoria="fiesta">Fiesta</button>
-            <button class="filtro-btn" data-categoria="recuerdos">Recuerdos</button>
+            <button class="filtro-btn active" data-tipo="todos">
+                <i class="fas fa-th"></i> Todos
+            </button>
+            <button class="filtro-btn" data-tipo="foto">
+                <i class="fas fa-camera"></i> Fotos
+            </button>
+            <button class="filtro-btn" data-tipo="video">
+                <i class="fas fa-video"></i> Videos
+            </button>
         </div>
 
-        <!-- Galería de fotos -->
-        <div id="galeria" class="galeria">
-            <!-- Las fotos se cargarán con JavaScript -->
+        <div id="contenedor-galerias" class="galerias-contenedor">
+            <!-- Se generará dinámicamente -->
         </div>
 
-        <!-- Cargar más fotos -->
+        <!-- Botón para cargar más -->
         <div class="cargar-mas">
-            <button id="btnCargarMas">Cargar más fotos</button>
+            <button id="btnCargarMas">
+                <i class="fas fa-sync-alt"></i> Cargar más recuerdos
+            </button>
         </div>
     </main>
 
-    <!-- Pie de página -->
+    <!-- Footer -->
     <footer>
-        <p>Con ❤️ para [Nombre] - 2025</p>
+        <div class="footer-contenido">
+            <div class="info-album">
+                <h3><i class="fas fa-heart"></i> Álbum XV Años</h3>
+                <p>Recuerdos digitales para siempre</p>
+            </div>
+            <div class="stats">
+                <p id="total-fotos">Fotos: 0</p>
+                <p id="total-videos">Videos: 0</p>
+                <p id="total-recuerdos">Total: 0</p>
+            </div>
+            <p class="creditos">Hecho con ❤️ usando Supabase + GitHub Pages</p>
+        </div>
     </footer>
 
+    <!-- Scripts -->
     <script src="script.js"></script>
 </body>
 </html>
