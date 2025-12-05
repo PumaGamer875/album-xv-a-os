@@ -39,6 +39,7 @@ const elementos = {
     totalRecuerdos: document.getElementById('total-recuerdos')
 };
 
+
 // ========== INICIALIZAR APP ==========
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Iniciando aplicación...');
@@ -175,15 +176,22 @@ function manejarSeleccionArchivos(e) {
 
 function procesarArchivos(archivos) {
     archivos.forEach(archivo => {
-        // Validar tipo
-        if (!archivo.type.startsWith('image/') && !archivo.type.startsWith('video/')) {
-            alert(`"${archivo.name}" no es una imagen ni video.`);
+        // Validar tipo de archivo
+        const tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 
+                                'video/mp4', 'video/webm', 'video/ogg'];
+        
+        if (!tiposPermitidos.includes(archivo.type)) {
+            alert(`❌ Tipo no permitido: "${archivo.name}"\n\nTipos aceptados:\n• Fotos: JPG, PNG, GIF, WebP\n• Videos: MP4, WebM, OGG`);
             return;
         }
 
-        // Validar tamaño (20MB máximo)
-        if (archivo.size > 20 * 1024 * 1024) {
-            alert(`"${archivo.name}" es muy grande (máximo 20MB).`);
+        // Validar tamaño (50MB máximo)
+        const maxSizeMB = 50;
+        const maxSizeBytes = maxSizeMB * 1024 * 1024;
+        
+        if (archivo.size > maxSizeBytes) {
+            const tamañoActualMB = (archivo.size / (1024 * 1024)).toFixed(2);
+            alert(`📏 Archivo muy grande: "${archivo.name}"\n\nTamaño actual: ${tamañoActualMB} MB\nLímite máximo: ${maxSizeMB} MB`);
             return;
         }
 
@@ -468,3 +476,4 @@ async function probarConexion() {
 
 // Ejecutar prueba al cargar
 probarConexion();
+
