@@ -1,18 +1,30 @@
 // ========== CONFIGURACIÓN SUPABASE ==========
-// ¡REEMPLAZA EL ANON KEY CON TU LLAVE REAL!
 const SUPABASE_URL = 'https://tvqwbvdzjtyzsfegyuzl.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR2cXdidmR6anR5enNmZWd5dXpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MjE5MDMsImV4cCI6MjA4MDQ5NzkwM30.JnE9FJFoeaULaddBWgXigGmvuKY56FjWID0fsAGkmgI';
 
-// ========== INICIALIZACIÓN ==========
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ========== CONFIGURACIÓN APP ==========
+const CONFIG = {
+    MAX_FILE_SIZE_MB: 50,
+    ALLOWED_TYPES: {
+        images: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'],
+        videos: ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/mpeg']
+    }
+};
 
-// ========== ESTADO ==========
+// ========== INICIALIZACIÓN SUPABASE ==========
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false }
+});
+
+// ========== ESTADO GLOBAL ==========
 const estado = {
     paginaActual: 0,
     porPagina: 12,
     tipoFiltro: 'todos',
     archivosParaSubir: [],
-    cargando: false
+    cargando: false,
+    todasLasFotos: [], // Para el visor
+    observerVideos: null // Para autoplay
 };
 
 // ========== ELEMENTOS DOM ==========
@@ -36,50 +48,68 @@ const elementos = {
     filtrosBtn: document.querySelectorAll('.filtro-btn'),
     totalFotos: document.getElementById('total-fotos'),
     totalVideos: document.getElementById('total-videos'),
-    totalRecuerdos: document.getElementById('total-recuerdos')
+    totalRecuerdos: document.getElementById('total-recuerdos'),
+    contadorResultados: document.getElementById('contadorResultados'),
+    btnSubirFooter: document.getElementById('btnSubirFooter'),
+    // Visor
+    visor: document.getElementById('visorFotos'),
+    visorImagen: document.getElementById('visorImagen'),
+    visorVideo: document.getElementById('visorVideo'),
+    visorTitulo: document.getElementById('visorTitulo'),
+    visorDescripcion: document.getElementById('visorDescripcion'),
+    visorFecha: document.getElementById('visorFecha'),
+    visorActual: document.getElementById('visorActual'),
+    visorTotal: document.getElementById('visorTotal'),
+    visorCerrar: document.getElementById('visorCerrar'),
+    visorAnterior: document.getElementById('visorAnterior'),
+    visorSiguiente: document.getElementById('visorSiguiente')
 };
 
+// ========== VARIABLES VISOR ==========
+let fotosVisor = [];
+let indiceVisor = 0;
+let inicioX = 0;
 
 // ========== INICIALIZAR APP ==========
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Iniciando aplicación...');
-    console.log('URL Supabase:', SUPABASE_URL);
-    console.log('Anon Key:', SUPABASE_ANON_KEY ? 'Configurada' : 'Falta');
+    console.log('🚀 Iniciando álbum XV años...');
+    console.log('📡 URL Supabase:', SUPABASE_URL);
     
     inicializarApp().catch(error => {
-        console.error('Error inicializando app:', error);
+        console.error('❌ Error inicializando app:', error);
         mostrarErrorInicial();
     });
+    
+    // Ejecutar prueba de conexión
+    probarConexion();
 });
 
 async function inicializarApp() {
     await cargarConfiguracion();
     await cargarGaleria();
     configurarEventos();
+    inicializarVisor();
     await actualizarEstadisticas();
 }
 
 // ========== CONFIGURACIÓN PORTADA ==========
 async function cargarConfiguracion() {
     try {
-        console.log('Cargando configuración...');
+        console.log('⚙️ Cargando configuración...');
         const { data: config, error } = await supabase
             .from('configuracion')
             .select('*');
 
-        if (error) {
-            console.error('Error Supabase:', error);
-            throw error;
-        }
+        if (error) throw error;
 
-        console.log('Configuración cargada:', config);
+        console.log('✅ Configuración cargada:', config);
 
         if (config && config.length > 0) {
             config.forEach(item => {
                 switch(item.clave) {
                     case 'portada_url':
                         if (item.valor) {
-                            elementos.portada.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.5)), url('${item.valor}')`;
+                            elementos.portada.style.backgroundImage = `url('${item.valor}')`;
                         }
                         break;
                     case 'titulo_portada':
@@ -91,30 +121,27 @@ async function cargarConfiguracion() {
                 }
             });
         } else {
-            // Configuración por defecto
             elementos.tituloPortada.textContent = 'Álbum XV Años';
             elementos.subtituloPortada.textContent = 'Bienvenido a mis recuerdos';
         }
     } catch (error) {
-        console.error('Error cargando configuración:', error);
+        console.error('❌ Error cargando configuración:', error);
         elementos.tituloPortada.textContent = 'Álbum XV Años';
-        elementos.subtituloPortada.textContent = 'Configura la base de datos';
+        elementos.subtituloPortada.textContent = 'Recuerdos para siempre';
     }
 }
 
-// ========== FUNCIONES DE SUBIDA ==========
+// ========== CONFIGURACIÓN DE EVENTOS ==========
 function configurarEventos() {
-    // Modal
-    elementos.btnMostrarSubir.addEventListener('click', () => {
-        elementos.modalSubir.classList.add('mostrar');
-    });
-
+    // Modal de subida
+    elementos.btnMostrarSubir.addEventListener('click', mostrarModalSubir);
+    elementos.btnSubirFooter.addEventListener('click', mostrarModalSubir);
     elementos.btnCerrarModal.addEventListener('click', cerrarModal);
     elementos.modalSubir.addEventListener('click', (e) => {
         if (e.target === elementos.modalSubir) cerrarModal();
     });
 
-    // Archivos
+    // Selección de archivos
     elementos.dropZone.addEventListener('click', () => elementos.fileInput.click());
     elementos.fileInput.addEventListener('change', manejarSeleccionArchivos);
 
@@ -137,7 +164,7 @@ function configurarEventos() {
 
     elementos.dropZone.addEventListener('drop', manejarDrop, false);
 
-    // Formulario
+    // Formulario de subida
     elementos.formSubir.addEventListener('submit', manejarSubmit);
 
     // Filtros
@@ -148,7 +175,11 @@ function configurarEventos() {
             estado.tipoFiltro = btn.dataset.tipo;
             estado.paginaActual = 0;
             elementos.contenedorGaleria.innerHTML = '';
-            cargarGaleria();
+            cargarGaleria().then(() => {
+                if (estado.tipoFiltro === 'todos') {
+                    manejarAutoplayVideos();
+                }
+            });
         });
     });
 
@@ -159,11 +190,23 @@ function configurarEventos() {
     });
 }
 
+function mostrarModalSubir() {
+    elementos.modalSubir.classList.add('mostrar');
+    document.body.style.overflow = 'hidden';
+}
+
+function cerrarModal() {
+    elementos.modalSubir.classList.remove('mostrar');
+    document.body.style.overflow = '';
+    resetearFormulario();
+}
+
 function prevenirDefault(e) {
     e.preventDefault();
     e.stopPropagation();
 }
 
+// ========== MANEJO DE ARCHIVOS ==========
 function manejarDrop(e) {
     const archivos = Array.from(e.dataTransfer.files);
     procesarArchivos(archivos);
@@ -176,22 +219,10 @@ function manejarSeleccionArchivos(e) {
 
 function procesarArchivos(archivos) {
     archivos.forEach(archivo => {
-        // Validar tipo de archivo
-        const tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 
-                                'video/mp4', 'video/webm', 'video/ogg'];
+        const validacion = validarArchivo(archivo);
         
-        if (!tiposPermitidos.includes(archivo.type)) {
-            alert(`❌ Tipo no permitido: "${archivo.name}"\n\nTipos aceptados:\n• Fotos: JPG, PNG, GIF, WebP\n• Videos: MP4, WebM, OGG`);
-            return;
-        }
-
-        // Validar tamaño (50MB máximo)
-        const maxSizeMB = 50;
-        const maxSizeBytes = maxSizeMB * 1024 * 1024;
-        
-        if (archivo.size > maxSizeBytes) {
-            const tamañoActualMB = (archivo.size / (1024 * 1024)).toFixed(2);
-            alert(`📏 Archivo muy grande: "${archivo.name}"\n\nTamaño actual: ${tamañoActualMB} MB\nLímite máximo: ${maxSizeMB} MB`);
+        if (!validacion.valido) {
+            alert(`❌ Error en "${archivo.name}":\n\n• ${validacion.errores.join('\n• ')}`);
             return;
         }
 
@@ -202,16 +233,45 @@ function procesarArchivos(archivos) {
     elementos.fileInput.value = '';
 }
 
+function validarArchivo(archivo) {
+    const errores = [];
+    
+    // Validar tipo
+    const tiposPermitidos = [...CONFIG.ALLOWED_TYPES.images, ...CONFIG.ALLOWED_TYPES.videos];
+    if (!tiposPermitidos.includes(archivo.type)) {
+        errores.push(`Tipo de archivo no permitido: ${archivo.type}`);
+    }
+    
+    // Validar tamaño
+    const maxBytes = CONFIG.MAX_FILE_SIZE_MB * 1024 * 1024;
+    if (archivo.size > maxBytes) {
+        const tamañoMB = (archivo.size / (1024 * 1024)).toFixed(2);
+        errores.push(`Tamaño excede ${CONFIG.MAX_FILE_SIZE_MB}MB (actual: ${tamañoMB}MB)`);
+    }
+    
+    // Validar nombre
+    if (archivo.name.length > 100) {
+        errores.push('Nombre de archivo muy largo (máx. 100 caracteres)');
+    }
+    
+    return {
+        valido: errores.length === 0,
+        errores: errores
+    };
+}
+
 function actualizarPreviewArchivos() {
     elementos.previewArchivos.innerHTML = '';
 
     estado.archivosParaSubir.forEach((archivo, index) => {
         const previewItem = document.createElement('div');
         previewItem.className = 'preview-item';
+        previewItem.title = archivo.name;
 
         if (archivo.type.startsWith('image/')) {
             const img = document.createElement('img');
             img.src = URL.createObjectURL(archivo);
+            img.alt = archivo.name;
             previewItem.appendChild(img);
         } else if (archivo.type.startsWith('video/')) {
             const video = document.createElement('video');
@@ -223,7 +283,9 @@ function actualizarPreviewArchivos() {
         const btnEliminar = document.createElement('button');
         btnEliminar.className = 'eliminar';
         btnEliminar.innerHTML = '×';
-        btnEliminar.addEventListener('click', () => {
+        btnEliminar.title = 'Eliminar';
+        btnEliminar.addEventListener('click', (e) => {
+            e.stopPropagation();
             estado.archivosParaSubir.splice(index, 1);
             actualizarPreviewArchivos();
         });
@@ -235,28 +297,14 @@ function actualizarPreviewArchivos() {
     elementos.btnSubmit.disabled = estado.archivosParaSubir.length === 0;
 }
 
+// ========== SUBIDA DE ARCHIVOS ==========
 async function manejarSubmit(e) {
     e.preventDefault();
     
     if (estado.archivosParaSubir.length === 0) {
-        alert('Por favor, selecciona al menos un archivo.');
+        alert('📁 Por favor, selecciona al menos un archivo.');
         return;
     }
-
-     // ✅ Validación adicional antes de subir
-    let archivosInvalidos = [];
-    estado.archivosParaSubir.forEach(archivo => {
-        const validacion = validarArchivo(archivo);
-        if (!validacion.valido) {
-            archivosInvalidos.push(`${archivo.name}: ${validacion.errores.join(', ')}`);
-        }
-    });
-
-     if (archivosInvalidos.length > 0) {
-        alert(`❌ Algunos archivos no cumplen los requisitos:\n\n${archivosInvalidos.join('\n')}`);
-        return;
-    }
-
 
     if (estado.cargando) return;
     
@@ -264,10 +312,10 @@ async function manejarSubmit(e) {
     elementos.btnSubmit.disabled = true;
     elementos.progresoContenedor.style.display = 'block';
     elementos.progresoBar.style.width = '0%';
-    elementos.progresoTexto.textContent = 'Preparando...';
+    elementos.progresoTexto.textContent = 'Preparando subida...';
 
-    const titulo = document.getElementById('titulo').value;
-    const descripcion = document.getElementById('descripcion').value;
+    const titulo = document.getElementById('titulo').value.trim();
+    const descripcion = document.getElementById('descripcion').value.trim();
 
     let subidasExitosas = 0;
     const totalArchivos = estado.archivosParaSubir.length;
@@ -277,9 +325,11 @@ async function manejarSubmit(e) {
         const tipo = archivo.type.startsWith('image/') ? 'foto' : 'video';
 
         try {
-            // Subir a Storage
-            const nombreArchivo = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${archivo.name.replace(/\s/g, '_')}`;
+            // Generar nombre único
+            const extension = archivo.name.split('.').pop();
+            const nombreArchivo = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${extension}`;
             
+            // Subir a Storage
             const { error: uploadError } = await supabase.storage
                 .from('fotos-album')
                 .upload(nombreArchivo, archivo);
@@ -291,7 +341,7 @@ async function manejarSubmit(e) {
                 .from('fotos-album')
                 .getPublicUrl(nombreArchivo);
 
-            // Guardar en BD
+            // Guardar en base de datos
             const { error: dbError } = await supabase
                 .from('fotos')
                 .insert({
@@ -311,15 +361,16 @@ async function manejarSubmit(e) {
             elementos.progresoTexto.textContent = `Subiendo... ${subidasExitosas}/${totalArchivos}`;
 
         } catch (error) {
-            console.error('Error subiendo:', error);
-            alert(`Error con "${archivo.name}": ${error.message}`);
+            console.error('❌ Error subiendo archivo:', error);
+            alert(`Error al subir "${archivo.name}": ${error.message}`);
         }
     }
 
-    elementos.progresoTexto.textContent = `¡Listo! ${subidasExitosas} archivos subidos.`;
+    elementos.progresoTexto.textContent = `✅ ¡Listo! ${subidasExitosas} archivos subidos exitosamente.`;
     elementos.btnSubmit.disabled = false;
     estado.cargando = false;
 
+    // Resetear y actualizar después de 2 segundos
     setTimeout(() => {
         resetearFormulario();
         cerrarModal();
@@ -337,69 +388,87 @@ function resetearFormulario() {
     elementos.progresoContenedor.style.display = 'none';
 }
 
-function cerrarModal() {
-    elementos.modalSubir.classList.remove('mostrar');
-    resetearFormulario();
-}
-
-// ========== GALERÍA ==========
+// ========== GALERÍA Y VISOR ==========
 async function cargarGaleria() {
     try {
         elementos.btnCargarMas.disabled = true;
         elementos.btnCargarMas.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
 
-        let query = supabase
+        // Obtener TODAS las fotos para el visor y filtros
+        let queryAll = supabase
             .from('fotos')
             .select('*')
-            .order('created_at', { ascending: false })
-            .range(
-                estado.paginaActual * estado.porPagina,
-                (estado.paginaActual * estado.porPagina) + estado.porPagina - 1
-            );
+            .order('created_at', { ascending: false });
 
+        const { data: todasLasFotos, error: errorAll } = await queryAll;
+        if (errorAll) throw errorAll;
+
+        estado.todasLasFotos = todasLasFotos;
+        
+        // Filtrar según tipo
+        let fotosFiltradas = todasLasFotos;
         if (estado.tipoFiltro !== 'todos') {
-            query = query.eq('tipo', estado.tipoFiltro);
+            fotosFiltradas = todasLasFotos.filter(foto => foto.tipo === estado.tipoFiltro);
         }
 
-        const { data: recuerdos, error } = await query;
+        // Calcular paginación
+        const inicio = estado.paginaActual * estado.porPagina;
+        const fin = inicio + estado.porPagina;
+        const fotosPagina = fotosFiltradas.slice(inicio, fin);
 
-        if (error) throw error;
+        // Actualizar contador
+        elementos.contadorResultados.textContent = `${fotosFiltradas.length} recuerdos`;
 
-        if (recuerdos.length === 0 && estado.paginaActual === 0) {
+        if (fotosPagina.length === 0 && estado.paginaActual === 0) {
             elementos.contenedorGaleria.innerHTML = `
                 <div class="no-recuerdos" style="grid-column: 1/-1; text-align: center; padding: 50px;">
                     <i class="fas fa-images fa-4x" style="color: #ccc; margin-bottom: 20px;"></i>
                     <h3 style="color: #666; margin-bottom: 15px;">No hay recuerdos aún</h3>
-                    <p style="color: #888;">¡Sube la primera foto o video!</p>
+                    <p style="color: #888;">¡Sé el primero en subir una foto o video!</p>
                 </div>
             `;
             elementos.btnCargarMas.style.display = 'none';
             return;
         }
 
-        recuerdos.forEach(recuerdo => {
-            const item = crearElementoRecuerdo(recuerdo);
+        // Limpiar contenedor si es primera página
+        if (estado.paginaActual === 0) {
+            elementos.contenedorGaleria.innerHTML = '';
+        }
+
+        // Crear elementos
+        fotosPagina.forEach((recuerdo, index) => {
+            const indiceGlobal = inicio + index;
+            const item = crearElementoRecuerdo(recuerdo, indiceGlobal, fotosFiltradas);
             elementos.contenedorGaleria.appendChild(item);
         });
 
-        elementos.btnCargarMas.style.display = recuerdos.length === estado.porPagina ? 'block' : 'none';
+        // Actualizar botón cargar más
+        elementos.btnCargarMas.style.display = fotosPagina.length === estado.porPagina ? 'block' : 'none';
         elementos.btnCargarMas.disabled = false;
-        elementos.btnCargarMas.innerHTML = '<i class="fas fa-sync-alt"></i> Cargar más';
+        elementos.btnCargarMas.innerHTML = '<i class="fas fa-sync-alt"></i> Cargar más recuerdos';
+
+        // Manejar autoplay de videos si estamos en vista "todos"
+        if (estado.tipoFiltro === 'todos') {
+            manejarAutoplayVideos();
+        }
 
     } catch (error) {
-        console.error('Error cargando galería:', error);
+        console.error('❌ Error cargando galería:', error);
         elementos.contenedorGaleria.innerHTML = `
             <div class="error" style="grid-column: 1/-1; text-align: center; padding: 50px; color: #ff6b8b;">
-                <h3>Error cargando recuerdos</h3>
-                <p>Verifica la conexión o configuración.</p>
+                <i class="fas fa-exclamation-triangle fa-3x"></i>
+                <h3>Error al cargar los recuerdos</h3>
+                <p>Por favor, intenta nuevamente más tarde.</p>
             </div>
         `;
     }
 }
 
-function crearElementoRecuerdo(recuerdo) {
+function crearElementoRecuerdo(recuerdo, index, todasLasFotos) {
     const item = document.createElement('div');
     item.className = 'item-galeria';
+    item.dataset.index = index;
 
     const tipoTexto = recuerdo.tipo === 'foto' ? 'Foto' : 'Video';
     const iconoTipo = recuerdo.tipo === 'foto' ? 'fa-camera' : 'fa-video';
@@ -407,14 +476,16 @@ function crearElementoRecuerdo(recuerdo) {
     const fecha = new Date(recuerdo.created_at).toLocaleDateString('es-ES', {
         year: 'numeric',
         month: 'long',
-        day: 'numeric'
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
     });
 
     item.innerHTML = `
         <div class="media-container">
             ${recuerdo.tipo === 'foto' 
                 ? `<img src="${recuerdo.url}" alt="${recuerdo.titulo || 'Recuerdo'}" loading="lazy">`
-                : `<video src="${recuerdo.url}" controls></video>`
+                : `<video src="${recuerdo.url}" muted loop playsinline></video>`
             }
             <span class="tipo-badge"><i class="fas ${iconoTipo}"></i> ${tipoTexto}</span>
         </div>
@@ -426,8 +497,165 @@ function crearElementoRecuerdo(recuerdo) {
             </div>
         </div>
     `;
+    
+    // Evento para abrir visor
+    item.addEventListener('click', () => {
+        abrirVisor(index, todasLasFotos);
+    });
 
     return item;
+}
+
+// ========== SISTEMA DE VISOR ==========
+function inicializarVisor() {
+    // Cerrar visor
+    elementos.visorCerrar.addEventListener('click', cerrarVisor);
+    elementos.visor.addEventListener('click', (e) => {
+        if (e.target === elementos.visor) cerrarVisor();
+    });
+    
+    // Navegación
+    elementos.visorAnterior.addEventListener('click', () => navegarVisor(-1));
+    elementos.visorSiguiente.addEventListener('click', () => navegarVisor(1));
+    
+    // Navegación con teclado
+    document.addEventListener('keydown', (e) => {
+        if (!elementos.visor.classList.contains('mostrar')) return;
+        
+        if (e.key === 'Escape') cerrarVisor();
+        if (e.key === 'ArrowLeft') navegarVisor(-1);
+        if (e.key === 'ArrowRight') navegarVisor(1);
+    });
+    
+    // Navegación con gestos táctiles
+    elementos.visor.addEventListener('touchstart', (e) => {
+        inicioX = e.touches[0].clientX;
+    });
+    
+    elementos.visor.addEventListener('touchend', (e) => {
+        const finX = e.changedTouches[0].clientX;
+        manejarGesto(finX);
+    });
+}
+
+function manejarGesto(finX) {
+    const diferencia = inicioX - finX;
+    const minDiferencia = 50;
+    
+    if (Math.abs(diferencia) > minDiferencia) {
+        if (diferencia > 0) {
+            navegarVisor(1); // Deslizó izquierda → siguiente
+        } else {
+            navegarVisor(-1); // Deslizó derecha → anterior
+        }
+    }
+}
+
+function abrirVisor(indice, todasLasFotos) {
+    fotosVisor = todasLasFotos;
+    indiceVisor = indice;
+    
+    mostrarRecuerdoVisor();
+    elementos.visor.classList.add('mostrar');
+    document.body.style.overflow = 'hidden';
+    
+    // Detener todos los videos en la galería
+    document.querySelectorAll('.item-galeria video').forEach(video => {
+        video.pause();
+        video.currentTime = 0;
+    });
+}
+
+function cerrarVisor() {
+    elementos.visor.classList.remove('mostrar');
+    document.body.style.overflow = '';
+    
+    // Pausar video del visor si está reproduciendo
+    if (!elementos.visorVideo.paused) {
+        elementos.visorVideo.pause();
+    }
+}
+
+function navegarVisor(direccion) {
+    indiceVisor += direccion;
+    
+    // Navegación circular
+    if (indiceVisor < 0) indiceVisor = fotosVisor.length - 1;
+    if (indiceVisor >= fotosVisor.length) indiceVisor = 0;
+    
+    mostrarRecuerdoVisor();
+}
+
+function mostrarRecuerdoVisor() {
+    const recuerdo = fotosVisor[indiceVisor];
+    
+    if (recuerdo.tipo === 'foto') {
+        elementos.visorImagen.src = recuerdo.url;
+        elementos.visorImagen.style.display = 'block';
+        elementos.visorVideo.style.display = 'none';
+        elementos.visorVideo.src = '';
+    } else {
+        elementos.visorVideo.src = recuerdo.url;
+        elementos.visorVideo.style.display = 'block';
+        elementos.visorImagen.style.display = 'none';
+        elementos.visorImagen.src = '';
+        elementos.visorVideo.load();
+    }
+    
+    // Mostrar información
+    elementos.visorTitulo.textContent = recuerdo.titulo || 'Sin título';
+    elementos.visorDescripcion.textContent = recuerdo.descripcion || '';
+    
+    const fecha = new Date(recuerdo.created_at).toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    elementos.visorFecha.innerHTML = `<i class="far fa-calendar-alt"></i> ${fecha}`;
+    
+    // Actualizar contador
+    elementos.visorActual.textContent = indiceVisor + 1;
+    elementos.visorTotal.textContent = fotosVisor.length;
+}
+
+// ========== AUTOPLAY VIDEOS ==========
+function manejarAutoplayVideos() {
+    // Limpiar observer anterior si existe
+    if (estado.observerVideos) {
+        estado.observerVideos.disconnect();
+    }
+
+    const videos = document.querySelectorAll('.item-galeria video');
+    
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            const video = entry.target;
+            
+            if (entry.isIntersecting) {
+                // Video visible - reproducir
+                video.muted = true;
+                video.play().catch(e => {
+                    // Autoplay bloqueado, no hacer nada
+                    console.log('Autoplay bloqueado para:', video.src);
+                });
+            } else {
+                // Video no visible - pausar
+                video.pause();
+                video.currentTime = 0;
+            }
+        });
+    }, {
+        threshold: 0.5,
+        rootMargin: '50px'
+    });
+    
+    videos.forEach(video => {
+        observer.observe(video);
+    });
+    
+    estado.observerVideos = observer;
 }
 
 // ========== ESTADÍSTICAS ==========
@@ -443,29 +671,35 @@ async function actualizarEstadisticas() {
             .select('*', { count: 'exact', head: true })
             .eq('tipo', 'video');
 
-        elementos.totalFotos.textContent = `Fotos: ${totalFotos || 0}`;
-        elementos.totalVideos.textContent = `Videos: ${totalVideos || 0}`;
-        elementos.totalRecuerdos.textContent = `Total: ${(totalFotos || 0) + (totalVideos || 0)}`;
+        const total = (totalFotos || 0) + (totalVideos || 0);
+        
+        elementos.totalFotos.innerHTML = `<i class="fas fa-camera"></i> Fotos: ${totalFotos || 0}`;
+        elementos.totalVideos.innerHTML = `<i class="fas fa-video"></i> Videos: ${totalVideos || 0}`;
+        elementos.totalRecuerdos.innerHTML = `<i class="fas fa-images"></i> Total: ${total}`;
 
     } catch (error) {
-        console.error('Error estadísticas:', error);
+        console.error('❌ Error estadísticas:', error);
     }
 }
 
 // ========== MANEJO DE ERRORES ==========
 function mostrarErrorInicial() {
-    elementos.tituloPortada.textContent = 'Error de Configuración';
-    elementos.subtituloPortada.textContent = 'Revisa la consola para más detalles';
+    elementos.tituloPortada.textContent = '⚠️ Configuración Requerida';
+    elementos.subtituloPortada.textContent = 'Verifica la configuración de Supabase';
     
     elementos.contenedorGaleria.innerHTML = `
-        <div style="text-align: center; padding: 50px;">
-            <h3 style="color: #ff6b8b;">Error de configuración</h3>
-            <p>Verifica que:</p>
-            <ul style="text-align: left; display: inline-block;">
-                <li>Las credenciales de Supabase sean correctas</li>
-                <li>Las tablas estén creadas</li>
-                <li>Las políticas de seguridad estén configuradas</li>
-            </ul>
+        <div style="text-align: center; padding: 50px; max-width: 800px; margin: 0 auto;">
+            <h3 style="color: #ff6b8b; margin-bottom: 20px;">Error de configuración</h3>
+            <p style="margin-bottom: 20px;">Verifica en la consola del navegador los errores.</p>
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: left;">
+                <p><strong>Posibles problemas:</strong></p>
+                <ul style="margin-top: 10px;">
+                    <li>Credenciales de Supabase incorrectas</li>
+                    <li>Tablas no creadas en la base de datos</li>
+                    <li>Políticas de seguridad no configuradas</li>
+                    <li>Bucket de Storage no creado</li>
+                </ul>
+            </div>
         </div>
     `;
 }
@@ -478,10 +712,14 @@ async function probarConexion() {
         
         if (error) {
             console.error('❌ Error de conexión:', error.message);
+            console.log('💡 Asegúrate de:');
+            console.log('1. Haber creado las tablas en SQL Editor');
+            console.log('2. Configurar las políticas de seguridad');
+            console.log('3. Crear el bucket "fotos-album" en Storage');
             return false;
         }
         
-        console.log('✅ Conexión exitosa');
+        console.log('✅ Conexión exitosa a Supabase');
         return true;
     } catch (err) {
         console.error('❌ Error general:', err);
@@ -489,7 +727,13 @@ async function probarConexion() {
     }
 }
 
-// Ejecutar prueba al cargar
-probarConexion();
+// ========== CARGA DE FUENTES Y RECURSOS ==========
+function cargarFuentes() {
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;500;600&display=swap';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+}
 
-
+// Inicializar fuentes
+cargarFuentes();
