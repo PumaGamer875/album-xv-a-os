@@ -5,29 +5,19 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // ========== CONFIGURACIÓN COMPRESIÓN INTELIGENTE ==========
 const COMPRESION_CONFIG = {
     ACTIVADA: true,
-    CALIDAD_JPEG: 0.82,           // Excelente calidad (82%)
-    CALIDAD_WEBP: 0.80,          // WebP es más eficiente
-    ANCHO_MAXIMO: 1920,          // Full HD es más que suficiente
+    CALIDAD_JPEG: 0.82,
+    ANCHO_MAXIMO: 1920,
     ALTO_MAXIMO: 1920,
-    TAMANIO_OBJETIVO_KB: 400,    // Objetivo: ~400KB por foto
-    COMPRIMIR_SI_MAYOR_A_MB: 1,  // Solo comprimir si > 1MB
-    MANTENER_EXIF: false,        // Quitar metadatos para ahorrar espacio
-    USAR_WEBP_SI_SOPORTA: true   // WebP ahorra 25-30% más que JPEG
+    TAMANIO_OBJETIVO_KB: 400,
+    COMPRIMIR_SI_MAYOR_A_MB: 1
 };
 
-// ========== DETECTAR SOPORTE WEBP ==========
-const soportaWebP = (() => {
-    const elem = document.createElement('canvas');
-    if (!!(elem.getContext && elem.getContext('2d'))) {
-        return elem.toDataURL('image/webp').indexOf('data:image/webp') === 0;
-    }
-    return false;
-})();
-
-console.log(`🖼️ Compresión: ${COMPRESION_CONFIG.ACTIVADA ? 'ACTIVA' : 'INACTIVA'}`);
-console.log(`📊 Formato preferido: ${soportaWebP ? 'WebP' : 'JPEG'}`);
-console.log(`🎯 Calidad: ${COMPRESION_CONFIG.CALIDAD_JPEG * 100}%`);
-console.log(`📏 Resolución máxima: ${COMPRESION_CONFIG.ANCHO_MAXIMO}px`);
+// ========== CONFIGURACIÓN ORDEN ==========
+const ORDEN_CONFIG = {
+    TODOS: 'ascendente',      // 1,2,3... (cronológico)
+    FOTOS: 'descendente',     // recientes primero
+    VIDEOS: 'descendente'     // recientes primero
+};
 
 // ========== INICIALIZACIÓN SUPABASE ==========
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -37,6 +27,7 @@ const estado = {
     paginaActual: 0,
     porPagina: 12,
     tipoFiltro: 'todos',
+    ordenFiltro: 'ascendente', // ascendente o descendente
     archivosParaSubir: [],
     cargando: false,
     todasLasFotos: [],
@@ -64,6 +55,7 @@ const elementos = {
     btnCargarMas: document.getElementById('btnCargarMas'),
     filtrosBtn: document.querySelectorAll('.filtro-btn'),
     btnSubirFooter: document.getElementById('btnSubirFooter'),
+    btnInfoContacto: document.getElementById('btnInfoContacto'),
     // Visor
     visor: document.getElementById('visorFotos'),
     visorImagen: document.getElementById('visorImagen'),
@@ -72,7 +64,9 @@ const elementos = {
     visorTotal: document.getElementById('visorTotal'),
     visorCerrar: document.getElementById('visorCerrar'),
     visorAnterior: document.getElementById('visorAnterior'),
-    visorSiguiente: document.getElementById('visorSiguiente')
+    visorSiguiente: document.getElementById('visorSiguiente'),
+    // WhatsApp
+    whatsappLink: document.querySelector('.whatsapp-link')
 };
 
 // ========== VARIABLES VISOR ==========
@@ -89,30 +83,11 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('📱 Modo móvil: Compresión optimizada');
     }
     
-    // Mostrar info de compresión
-    if (COMPRESION_CONFIG.ACTIVADA) {
-        mostrarInfoCompresion();
-    }
-    
     inicializarApp().catch(error => {
         console.error('❌ Error:', error);
         mostrarErrorInicial();
     });
 });
-
-function mostrarInfoCompresion() {
-    const info = document.createElement('div');
-    info.className = 'info-compresion';
-    info.innerHTML = `
-        <i class="fas fa-compress-alt"></i>
-        <span>Fotos optimizadas para web (${COMPRESION_CONFIG.CALIDAD_JPEG * 100}% calidad)</span>
-    `;
-    
-    const dropZone = elementos.dropZone;
-    if (dropZone.querySelector('.info-tamano')) {
-        dropZone.querySelector('.info-tamano').after(info);
-    }
-}
 
 async function inicializarApp() {
     await cargarConfiguracion();
@@ -120,126 +95,6 @@ async function inicializarApp() {
     configurarEventos();
     inicializarVisor();
     await verificarEspacioDisponible();
-}
-
-// ========== FUNCIÓN DE COMPRESIÓN INTELIGENTE ==========
-async function comprimirImagenInteligente(archivo) {
-    // Solo comprimir imágenes y si la compresión está activada
-    if (!COMPRESION_CONFIG.ACTIVADA || !archivo.type.startsWith('image/')) {
-        return archivo;
-    }
-    
-    // Solo comprimir si es mayor al umbral
-    if (archivo.size < COMPRESION_CONFIG.COMPRIMIR_SI_MAYOR_A_MB * 1024 * 1024) {
-        console.log(`📊 No necesita compresión: ${(archivo.size/1024).toFixed(0)}KB`);
-        return archivo;
-    }
-    
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        
-        reader.onload = async (e) => {
-            try {
-                const img = new Image();
-                img.src = e.target.result;
-                
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d', { alpha: false });
-                    
-                    // Calcular nuevas dimensiones manteniendo aspecto
-                    let ancho = img.width;
-                    let alto = img.height;
-                    
-                    // Redimensionar solo si es más grande que el máximo
-                    if (ancho > COMPRESION_CONFIG.ANCHO_MAXIMO || alto > COMPRESION_CONFIG.ALTO_MAXIMO) {
-                        const ratio = Math.min(
-                            COMPRESION_CONFIG.ANCHO_MAXIMO / ancho,
-                            COMPRESION_CONFIG.ALTO_MAXIMO / alto
-                        );
-                        ancho = Math.floor(ancho * ratio);
-                        alto = Math.floor(alto * ratio);
-                    }
-                    
-                    // Configurar canvas
-                    canvas.width = ancho;
-                    canvas.height = alto;
-                    
-                    // Configurar calidad de renderizado
-                    ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'high';
-                    
-                    // Dibujar imagen redimensionada
-                    ctx.drawImage(img, 0, 0, ancho, alto);
-                    
-                    // Determinar formato y calidad
-                    const formato = soportaWebP && COMPRESION_CONFIG.USAR_WEBP_SI_SOPORTA ? 'image/webp' : 'image/jpeg';
-                    const calidad = formato === 'image/webp' ? COMPRESION_CONFIG.CALIDAD_WEBP : COMPRESION_CONFIG.CALIDAD_JPEG;
-                    
-                    // Convertir a Blob
-                    canvas.toBlob((blob) => {
-                        if (!blob) {
-                            console.warn('⚠️ No se pudo comprimir, usando original');
-                            resolve(archivo);
-                            return;
-                        }
-                        
-                        // Crear nuevo archivo comprimido
-                        const nombreOriginal = archivo.name;
-                        const extension = formato === 'image/webp' ? 'webp' : 'jpg';
-                        const nombreComprimido = nombreOriginal.replace(/\.[^/.]+$/, '') + `_opt.${extension}`;
-                        
-                        const archivoComprimido = new File([blob], nombreComprimido, {
-                            type: formato,
-                            lastModified: Date.now()
-                        });
-                        
-                        // Calcular reducción
-                        const reduccion = ((archivo.size - blob.size) / archivo.size * 100).toFixed(1);
-                        console.log(`✅ Comprimido: ${(archivo.size/1024/1024).toFixed(2)}MB → ${(blob.size/1024/1024).toFixed(2)}MB (${reduccion}% reducción)`);
-                        
-                        // Si la compresión no fue efectiva (>90% del tamaño original), usar original
-                        if (blob.size > archivo.size * 0.9) {
-                            console.log('ℹ️ Compresión mínima, usando original');
-                            resolve(archivo);
-                        } else {
-                            resolve(archivoComprimido);
-                        }
-                        
-                    }, formato, calidad);
-                };
-                
-                img.onerror = () => {
-                    console.warn('⚠️ Error cargando imagen, usando original');
-                    resolve(archivo);
-                };
-                
-            } catch (error) {
-                console.error('❌ Error en compresión:', error);
-                resolve(archivo); // Fallback al original
-            }
-        };
-        
-        reader.onerror = () => {
-            console.warn('⚠️ Error leyendo archivo, usando original');
-            resolve(archivo);
-        };
-        
-        reader.readAsDataURL(archivo);
-    });
-}
-
-// ========== FUNCIÓN PARA VIDEOS (compresión ligera) ==========
-async function optimizarVideo(archivo) {
-    if (!archivo.type.startsWith('video/')) {
-        return archivo;
-    }
-    
-    // Para videos, solo limitamos duración si es muy largo
-    // Nota: La compresión real de video requiere backend
-    console.log(`🎥 Video: ${(archivo.size/1024/1024).toFixed(2)}MB - ${archivo.type}`);
-    
-    return archivo; // Devolver original (la compresión de video es compleja)
 }
 
 // ========== CONFIGURACIÓN PORTADA ==========
@@ -280,6 +135,24 @@ function configurarEventos() {
     elementos.btnSubirFooter.addEventListener('click', mostrarModalSubir);
     elementos.btnCerrarModal.addEventListener('click', cerrarModal);
     
+    // Info contacto
+    elementos.btnInfoContacto.addEventListener('click', () => {
+        elementos.btnInfoContacto.scrollIntoView({ behavior: 'smooth' });
+    });
+    
+    // WhatsApp link
+    if (elementos.whatsappLink) {
+        elementos.whatsappLink.addEventListener('click', (e) => {
+            // El enlace ya tiene el mensaje predefinido
+            console.log('📱 Abriendo WhatsApp con mensaje predefinido');
+            
+            // Si está en desktop, abrir web.whatsapp.com
+            if (!esMovil()) {
+                // Ya está configurado en el href
+            }
+        });
+    }
+    
     // Evitar cierre al hacer click dentro del modal
     elementos.modalSubir.querySelector('.modal-contenido').addEventListener('click', (e) => {
         e.stopPropagation();
@@ -317,14 +190,18 @@ function configurarEventos() {
     // Formulario de subida
     elementos.formSubir.addEventListener('submit', manejarSubmit);
 
-    // Filtros
+    // Filtros con orden
     elementos.filtrosBtn.forEach(btn => {
         btn.addEventListener('click', () => {
             elementos.filtrosBtn.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
+            
             estado.tipoFiltro = btn.dataset.tipo;
+            estado.ordenFiltro = btn.dataset.orden || ORDEN_CONFIG[estado.tipoFiltro.toUpperCase()];
             estado.paginaActual = 0;
             elementos.contenedorGaleria.innerHTML = '';
+            
+            console.log(`🔀 Filtro: ${estado.tipoFiltro}, Orden: ${estado.ordenFiltro}`);
             cargarGaleria();
         });
     });
@@ -383,8 +260,12 @@ function validarArchivo(archivo) {
     const errores = [];
     
     // Validar tipo
-    const tiposPermitidos = [...COMPRESION_CONFIG.ALLOWED_TYPES?.images || [], ...COMPRESION_CONFIG.ALLOWED_TYPES?.videos || []];
-    if (tiposPermitidos.length > 0 && !tiposPermitidos.includes(archivo.type)) {
+    const tiposPermitidos = [
+        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+        'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/mpeg'
+    ];
+    
+    if (!tiposPermitidos.includes(archivo.type)) {
         errores.push('Tipo de archivo no permitido. Solo imágenes y videos');
     }
     
@@ -447,6 +328,78 @@ async function actualizarPreviewArchivos() {
     elementos.btnSubmit.innerHTML = `<i class="fas fa-paper-plane"></i> Subir ${estado.archivosParaSubir.length} archivo${estado.archivosParaSubir.length > 1 ? 's' : ''} (${totalMB.toFixed(1)}MB)`;
 }
 
+// ========== COMPRESIÓN INTELIGENTE ==========
+async function comprimirImagenInteligente(archivo) {
+    if (!COMPRESION_CONFIG.ACTIVADA || !archivo.type.startsWith('image/')) {
+        return archivo;
+    }
+    
+    if (archivo.size < COMPRESION_CONFIG.COMPRIMIR_SI_MAYOR_A_MB * 1024 * 1024) {
+        return archivo;
+    }
+    
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            const img = new Image();
+            img.src = e.target.result;
+            
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d', { alpha: false });
+                
+                let ancho = img.width;
+                let alto = img.height;
+                
+                if (ancho > COMPRESION_CONFIG.ANCHO_MAXIMO || alto > COMPRESION_CONFIG.ALTO_MAXIMO) {
+                    const ratio = Math.min(
+                        COMPRESION_CONFIG.ANCHO_MAXIMO / ancho,
+                        COMPRESION_CONFIG.ALTO_MAXIMO / alto
+                    );
+                    ancho = Math.floor(ancho * ratio);
+                    alto = Math.floor(alto * ratio);
+                }
+                
+                canvas.width = ancho;
+                canvas.height = alto;
+                
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(img, 0, 0, ancho, alto);
+                
+                canvas.toBlob((blob) => {
+                    if (!blob) {
+                        resolve(archivo);
+                        return;
+                    }
+                    
+                    const nombreComprimido = archivo.name.replace(/\.[^/.]+$/, '') + '_opt.jpg';
+                    const archivoComprimido = new File([blob], nombreComprimido, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    });
+                    
+                    const reduccion = ((archivo.size - blob.size) / archivo.size * 100).toFixed(1);
+                    console.log(`✅ Comprimido: ${(archivo.size/1024/1024).toFixed(2)}MB → ${(blob.size/1024/1024).toFixed(2)}MB (${reduccion}% reducción)`);
+                    
+                    if (blob.size > archivo.size * 0.9) {
+                        resolve(archivo);
+                    } else {
+                        resolve(archivoComprimido);
+                    }
+                    
+                }, 'image/jpeg', COMPRESION_CONFIG.CALIDAD_JPEG);
+            };
+            
+            img.onerror = () => resolve(archivo);
+        };
+        
+        reader.onerror = () => resolve(archivo);
+        reader.readAsDataURL(archivo);
+    });
+}
+
 // ========== SUBIDA CON COMPRESIÓN ==========
 async function manejarSubmit(e) {
     e.preventDefault();
@@ -476,13 +429,9 @@ async function manejarSubmit(e) {
         try {
             let archivoParaSubir = archivoOriginal;
             
-            // Optimizar según tipo
             if (archivoOriginal.type.startsWith('image/')) {
                 elementos.progresoTexto.textContent = `Optimizando imagen ${i + 1}/${totalArchivos}...`;
                 archivoParaSubir = await comprimirImagenInteligente(archivoOriginal);
-            } else if (archivoOriginal.type.startsWith('video/')) {
-                elementos.progresoTexto.textContent = `Procesando video ${i + 1}/${totalArchivos}...`;
-                archivoParaSubir = await optimizarVideo(archivoOriginal);
             }
             
             tamañoComprimidoTotal += archivoParaSubir.size;
@@ -533,7 +482,7 @@ async function manejarSubmit(e) {
 
     // Calcular ahorro
     const ahorroMB = (tamañoOriginalTotal - tamañoComprimidoTotal) / 1024 / 1024;
-    const porcentajeAhorro = ((ahorroMB / (tamañoOriginalTotal / 1024 / 1024)) * 100).toFixed(1);
+    const porcentajeAhorro = tamañoOriginalTotal > 0 ? ((ahorroMB / (tamañoOriginalTotal / 1024 / 1024)) * 100).toFixed(1) : 0;
     
     elementos.progresoTexto.textContent = `✅ ¡Listo! ${subidasExitosas} archivos subidos`;
     
@@ -561,13 +510,12 @@ async function manejarSubmit(e) {
 
 function actualizarContadorEspacio() {
     const usadoMB = estado.espacioUsadoMB;
-    const porcentaje = (usadoMB / 1024) * 100; // 1024MB = 1GB límite free
+    const porcentaje = (usadoMB / 1024) * 100;
     
     console.log(`📊 Espacio usado: ${usadoMB.toFixed(2)}MB (${porcentaje.toFixed(1)}% del límite free)`);
     
     if (porcentaje > 70) {
         console.warn('⚠️ ALERTA: El álbum está llegando al límite de espacio');
-        // Podrías mostrar una alerta al usuario
     }
 }
 
@@ -578,58 +526,43 @@ function resetearFormulario() {
     elementos.btnSubmit.innerHTML = '<i class="fas fa-paper-plane"></i> Subir Recuerdos';
 }
 
-// ========== VERIFICAR ESPACIO DISPONIBLE ==========
-async function verificarEspacioDisponible() {
-    try {
-        console.log('🔍 Verificando espacio en Supabase...');
-        
-        // Obtener lista de archivos
-        const { data: archivos, error } = await supabase.storage
-            .from('fotos-album')
-            .list();
-        
-        if (error) throw error;
-        
-        console.log(`📦 Total archivos en álbum: ${archivos.length}`);
-        
-        // Actualizar estado
-        estado.archivosSubidos = archivos.length;
-        
-        // Nota: Para obtener tamaño exacto necesitaríamos metadata
-        // Esta es una estimación
-        const estimadoMB = archivos.length * 0.4; // 400KB promedio por foto comprimida
-        estado.espacioUsadoMB = estimadoMB;
-        
-        actualizarContadorEspacio();
-        
-        return true;
-        
-    } catch (error) {
-        console.error('Error verificando espacio:', error);
-        return false;
-    }
-}
-
-// ========== GALERÍA Y VISOR (sin cambios) ==========
+// ========== GALERÍA CON ORDEN PERSONALIZADO ==========
 async function cargarGaleria() {
     try {
         elementos.btnCargarMas.disabled = true;
         elementos.btnCargarMas.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
 
+        // Determinar orden según filtro
+        let ordenCampo = 'created_at';
+        let ordenDireccion = estado.ordenFiltro === 'ascendente' ? true : false; // true = ASC, false = DESC
+        
+        // Para "todos" usar ascendente (1,2,3...)
+        // Para fotos/videos usar descendente (recientes primero)
+        if (estado.tipoFiltro === 'todos') {
+            ordenDireccion = true; // ASC
+        } else {
+            ordenDireccion = false; // DESC
+        }
+
+        console.log(`🔄 Cargando: ${estado.tipoFiltro} - Orden: ${ordenDireccion ? 'ASC (1,2,3...)' : 'DESC (recientes primero)'}`);
+
+        // Obtener datos con orden correcto
         const { data: todasLasFotos, error } = await supabase
             .from('fotos')
             .select('*')
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: ordenDireccion });
 
         if (error) throw error;
 
         estado.todasLasFotos = todasLasFotos;
         
+        // Filtrar según tipo
         let contenidoFiltrado = todasLasFotos;
         if (estado.tipoFiltro !== 'todos') {
             contenidoFiltrado = todasLasFotos.filter(item => item.tipo === estado.tipoFiltro);
         }
         
+        // Aplicar paginación
         const inicio = estado.paginaActual * estado.porPagina;
         const fin = inicio + estado.porPagina;
         const contenidoPagina = contenidoFiltrado.slice(inicio, fin);
@@ -646,16 +579,19 @@ async function cargarGaleria() {
             return;
         }
 
+        // Limpiar si es primera página
         if (estado.paginaActual === 0) {
             elementos.contenedorGaleria.innerHTML = '';
         }
 
+        // Crear elementos
         contenidoPagina.forEach((item, index) => {
             const indiceGlobal = inicio + index;
             const elementoGaleria = crearElementoGaleria(item, indiceGlobal);
             elementos.contenedorGaleria.appendChild(elementoGaleria);
         });
 
+        // Actualizar botón cargar más
         elementos.btnCargarMas.style.display = contenidoPagina.length === estado.porPagina ? 'block' : 'none';
         elementos.btnCargarMas.disabled = false;
         elementos.btnCargarMas.innerHTML = '<i class="fas fa-sync-alt"></i> Cargar más';
@@ -692,6 +628,32 @@ function crearElementoGaleria(item, index) {
     });
 
     return elemento;
+}
+
+// ========== VERIFICAR ESPACIO DISPONIBLE ==========
+async function verificarEspacioDisponible() {
+    try {
+        const { data: archivos, error } = await supabase.storage
+            .from('fotos-album')
+            .list();
+        
+        if (error) throw error;
+        
+        console.log(`📦 Total archivos en álbum: ${archivos.length}`);
+        estado.archivosSubidos = archivos.length;
+        
+        // Estimación simple
+        const estimadoMB = archivos.length * 0.4;
+        estado.espacioUsadoMB = estimadoMB;
+        
+        actualizarContadorEspacio();
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error verificando espacio:', error);
+        return false;
+    }
 }
 
 // ========== SISTEMA DE VISOR ==========
