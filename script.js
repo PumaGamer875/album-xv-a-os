@@ -239,9 +239,24 @@ async function manejarSubmit(e) {
     e.preventDefault();
     
     if (estado.archivosParaSubir.length === 0) {
-        alert('Selecciona al menos un archivo.');
+        alert('Por favor, selecciona al menos un archivo.');
         return;
     }
+
+     // ✅ Validación adicional antes de subir
+    let archivosInvalidos = [];
+    estado.archivosParaSubir.forEach(archivo => {
+        const validacion = validarArchivo(archivo);
+        if (!validacion.valido) {
+            archivosInvalidos.push(`${archivo.name}: ${validacion.errores.join(', ')}`);
+        }
+    });
+
+     if (archivosInvalidos.length > 0) {
+        alert(`❌ Algunos archivos no cumplen los requisitos:\n\n${archivosInvalidos.join('\n')}`);
+        return;
+    }
+
 
     if (estado.cargando) return;
     
@@ -476,4 +491,5 @@ async function probarConexion() {
 
 // Ejecutar prueba al cargar
 probarConexion();
+
 
