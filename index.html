@@ -17,7 +17,7 @@
             <p id="subtitulo-portada">Álbum digital de recuerdos</p>
             <div class="portada-botones">
                 <button class="btn-subir" id="btnMostrarSubir">
-                    <i class="fas fa-cloud-upload-alt"></i> Subir Fotos
+                    <i class="fas fa-cloud-upload-alt"></i> Subir Recuerdos
                 </button>
                 <a href="#galeria" class="btn-ver-galeria">
                     <i class="fas fa-images"></i> Ver Galería
@@ -26,25 +26,25 @@
         </div>
     </section>
 
-    <!-- Modal simplificado para subir archivos -->
+    <!-- Modal para subir archivos -->
     <div class="modal" id="modalSubir">
         <div class="modal-contenido">
             <div class="modal-header">
-                <h2><i class="fas fa-plus-circle"></i> Subir Fotos</h2>
+                <h2><i class="fas fa-plus-circle"></i> Subir Recuerdos</h2>
                 <button class="cerrar-modal" id="btnCerrarModal">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="formSubir">
                     <div class="input-group">
-                        <label><i class="fas fa-file-upload"></i> Seleccionar fotos</label>
+                        <label><i class="fas fa-file-upload"></i> Seleccionar fotos/videos</label>
                         <div class="drop-zone" id="dropZone">
                             <i class="fas fa-cloud-upload-alt fa-3x"></i>
-                            <p class="drop-text">Toca aquí para seleccionar fotos</p>
+                            <p class="drop-text">Toca aquí para seleccionar</p>
                             <p class="drop-text">o arrastra y suelta</p>
-                            <input type="file" id="fileInput" multiple accept="image/*" capture="environment">
+                            <input type="file" id="fileInput" multiple accept="image/*,video/*">
                             <p class="info-tamano">
                                 <i class="fas fa-info-circle"></i>
-                                Máximo 50MB por foto
+                                Máximo 50MB por archivo
                             </p>
                         </div>
                         <div id="previewArchivos" class="preview-archivos"></div>
@@ -56,14 +56,14 @@
                     </div>
 
                     <button type="submit" class="btn-submit" id="btnSubmit">
-                        <i class="fas fa-paper-plane"></i> Subir Fotos
+                        <i class="fas fa-paper-plane"></i> Subir Recuerdos
                     </button>
                 </form>
             </div>
         </div>
     </div>
 
-    <!-- Visor de fotos -->
+    <!-- Visor de fotos/videos (SIN INFO, SOLO MEDIA) -->
     <div class="visor-fotos" id="visorFotos">
         <button class="visor-cerrar" id="visorCerrar">
             <i class="fas fa-times"></i>
@@ -76,10 +76,12 @@
         </button>
         
         <div class="visor-contenido">
-            <img id="visorImagen" src="" alt="">
-            <div class="visor-contador">
-                <span id="visorActual">1</span> / <span id="visorTotal">1</span>
-            </div>
+            <img id="visorImagen" src="" alt="" style="display: none;">
+            <video id="visorVideo" controls style="display: none;"></video>
+        </div>
+        
+        <div class="visor-contador">
+            <span id="visorActual">1</span> / <span id="visorTotal">1</span>
         </div>
     </div>
 
@@ -88,11 +90,14 @@
         <div class="filtros-contenedor">
             <div class="filtros">
                 <button class="filtro-btn active" data-tipo="todos">
-                    <i class="fas fa-th"></i> Todas
+                    <i class="fas fa-th"></i> Todos
                 </button>
-            </div>
-            <div class="contador-filtro">
-                <span id="contadorResultados">0 fotos</span>
+                <button class="filtro-btn" data-tipo="foto">
+                    <i class="fas fa-camera"></i> Fotos
+                </button>
+                <button class="filtro-btn" data-tipo="video">
+                    <i class="fas fa-video"></i> Videos
+                </button>
             </div>
         </div>
 
@@ -103,7 +108,7 @@
         <!-- Botón para cargar más -->
         <div class="cargar-mas">
             <button id="btnCargarMas">
-                <i class="fas fa-sync-alt"></i> Cargar más fotos
+                <i class="fas fa-sync-alt"></i> Cargar más recuerdos
             </button>
         </div>
     </main>
@@ -115,12 +120,9 @@
                 <h3><i class="fas fa-heart"></i> Álbum XV Años</h3>
                 <p>Recuerdos para siempre</p>
             </div>
-            <div class="stats">
-                <p id="total-fotos"><i class="fas fa-camera"></i> Fotos: 0</p>
-            </div>
             <div class="footer-links">
                 <button id="btnSubirFooter" class="btn-footer">
-                    <i class="fas fa-cloud-upload-alt"></i> Subir foto
+                    <i class="fas fa-cloud-upload-alt"></i> Subir recuerdo
                 </button>
                 <a href="#portada" class="btn-footer">
                     <i class="fas fa-home"></i> Inicio
